@@ -191,9 +191,10 @@ export function useHorsemanEvents({
             }
 
             // Normal/Plan mode - show permission UI
+            // Tag with active UI session (MCP doesn't know session context)
             addPendingPermission({
               requestId: payload.requestId,
-              sessionId: 'mcp',
+              sessionId: uiSessionIdRef.current || 'mcp',
               toolName: payload.toolName,
               toolInput: payload.toolInput,
               timestamp: Date.now(),
@@ -203,9 +204,15 @@ export function useHorsemanEvents({
           case 'permission.resolved':
             removePendingPermission(payload.requestId)
             break
-          case 'question.requested':
-            addPendingQuestion(payload.question)
+          case 'question.requested': {
+            // Tag with active UI session (MCP doesn't know session context)
+            const taggedQuestion = {
+              ...payload.question,
+              sessionId: uiSessionIdRef.current || 'mcp',
+            }
+            addPendingQuestion(taggedQuestion)
             break
+          }
           case 'question.resolved':
             removePendingQuestion(payload.requestId)
             break

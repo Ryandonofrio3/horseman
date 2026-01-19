@@ -1,13 +1,15 @@
 import { useMemo } from 'react'
 import { useStore } from './index'
 import { useShallow } from 'zustand/shallow'
-import type { ParsedMessage, Session, SessionEvent, TodoItem, ToolCall } from '@/domain'
+import type { ParsedMessage, PendingPermission, PendingQuestion, Session, SessionEvent, TodoItem, ToolCall } from '@/domain'
 
 const EMPTY_MESSAGES: ParsedMessage[] = []
 const EMPTY_SESSIONS: Session[] = []
 const EMPTY_TODOS: TodoItem[] = []
 const EMPTY_EVENTS: SessionEvent[] = []
 const EMPTY_TOOLS: ToolCall[] = []
+const EMPTY_PERMISSIONS: PendingPermission[] = []
+const EMPTY_QUESTIONS: PendingQuestion[] = []
 
 export function useSessions() {
   const sessions = useStore(useShallow((s) => s.sessions))
@@ -48,6 +50,26 @@ export function usePendingPermissions() {
 
 export function usePendingQuestions() {
   return useStore((s) => s.pendingQuestions)
+}
+
+/** Returns permissions filtered to a specific session */
+export function useSessionPermissions(sessionId: string | null) {
+  const allPermissions = useStore((s) => s.pendingPermissions)
+  return useMemo(() => {
+    if (!sessionId) return EMPTY_PERMISSIONS
+    const filtered = allPermissions.filter((p) => p.sessionId === sessionId)
+    return filtered.length > 0 ? filtered : EMPTY_PERMISSIONS
+  }, [allPermissions, sessionId])
+}
+
+/** Returns questions filtered to a specific session */
+export function useSessionQuestions(sessionId: string | null) {
+  const allQuestions = useStore((s) => s.pendingQuestions)
+  return useMemo(() => {
+    if (!sessionId) return EMPTY_QUESTIONS
+    const filtered = allQuestions.filter((q) => q.sessionId === sessionId)
+    return filtered.length > 0 ? filtered : EMPTY_QUESTIONS
+  }, [allQuestions, sessionId])
 }
 
 export function useToolById(sessionId: string | null, toolId: string) {

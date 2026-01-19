@@ -238,17 +238,24 @@ Claude wants tool → --permission-prompt-tool intercepts
 → Claude continues
 ```
 
-### Permission UI Filtering
+### Permission & Question Session Isolation
 
-**Do NOT filter by session ID** - MCP doesn't have Claude's session context, uses `"mcp"` as placeholder.
+MCP doesn't know Claude's session context. The frontend tags events with the active UI session when received.
 
 ```tsx
-// ✅ CORRECT - use selector
-const permissions = usePendingPermissions()
+// ✅ CORRECT - use session-filtered selectors
+const permissions = useSessionPermissions(uiSessionId)
+const questions = useSessionQuestions(uiSessionId)
 
-// ❌ WRONG - MCP uses "mcp" as session_id, never matches
-const filtered = permissions.filter(p => p.sessionId === claudeSessionId)
+// ❌ WRONG - shows all sessions' permissions/questions
+const permissions = usePendingPermissions()
+const questions = usePendingQuestions()
 ```
+
+**Flow:**
+1. MCP emits event with `sessionId: "mcp"` (placeholder)
+2. `useHorsemanEvents` receives it, tags with `uiSessionIdRef.current`
+3. ChatView uses session-filtered selectors to show only this session's items
 
 ### Response Format
 

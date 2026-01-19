@@ -334,7 +334,7 @@ Claude calls mcp__horseman__request_permission
 |---------|---------------|-----|
 | Direct store access with `?? []` | Creates new array every render → infinite loop | Use selectors |
 | Modifying `messages[]` directly | Indexes become stale | Use store actions |
-| Filtering permissions by sessionId | MCP uses `"mcp"` placeholder, never matches | Show all permissions |
+| Using global `usePendingPermissions()` | Shows all sessions' permissions, causes cross-session bleed | Use `useSessionPermissions(uiSessionId)` |
 | Using `stdin(Stdio::piped())` | Claude blocks forever waiting for input | Use `Stdio::null()` |
 | Not syncing refs to null | Session bleed - old session's events handled | Always sync refs, even to null |
 | Importing from `@/types/session` | Legacy path, may be removed | Import from `@/domain` |

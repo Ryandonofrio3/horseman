@@ -16,7 +16,7 @@ import { AskUserQuestionCard } from '@/components/permissions/AskUserQuestionCar
 import { PlanOverlay } from './PlanOverlay'
 import { useConversationSearch } from '@/hooks/useConversationSearch'
 import { useSlashCommand } from '@/hooks/useSlashCommand'
-import { usePendingPermissions, usePendingQuestions, useSessionEvents, useAllTools } from '@/store/selectors'
+import { useSessionPermissions, useSessionQuestions, useSessionEvents, useAllTools } from '@/store/selectors'
 import { useStore } from '@/store'
 import { MessageSquare, Loader2 } from 'lucide-react'
 import type { SlashCommand } from './SlashCommandMenu'
@@ -181,9 +181,9 @@ export function ChatView({
     }
   }, [claudeSessionId, workingDirectory, runSlashCommand, clearMessages, updateSession, uiSessionId, usage, appendSessionEvent])
 
-  // Get all pending permissions and questions - show all since MCP doesn't have session context
-  const pendingPermissions = usePendingPermissions()
-  const pendingQuestions = usePendingQuestions()
+  // Get permissions and questions scoped to this session
+  const pendingPermissions = useSessionPermissions(uiSessionId)
+  const pendingQuestions = useSessionQuestions(uiSessionId)
   const nextPermission = pendingPermissions[0] ?? null
 
   // Get compaction events for rendering dividers in message list
