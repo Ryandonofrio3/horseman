@@ -1,3 +1,4 @@
+import { memo, useEffect, useMemo, useState } from 'react'
 import type { ToolCall } from '@/domain'
 import {
   Collapsible,
@@ -6,7 +7,6 @@ import {
 } from '@/components/ui/collapsible'
 import { Loader2, CheckCircle2, XCircle, ChevronRight, Bot } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useEffect, useState } from 'react'
 import { ChildToolDisplay } from './ChildToolDisplay'
 
 interface SubagentDisplayProps {
@@ -25,9 +25,8 @@ const SUBAGENT_LABELS: Record<string, string> = {
   'statusline-setup': 'Setup',
 }
 
-export function SubagentDisplay({ tool, childTools = [], allTools = [] }: SubagentDisplayProps) {
+function SubagentDisplayInner({ tool, childTools = [], allTools = [] }: SubagentDisplayProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const [now, setNow] = useState(() => Date.now())
   const { subagent } = tool
 
   const subagentType = subagent?.type || 'Task'
@@ -43,21 +42,18 @@ export function SubagentDisplay({ tool, childTools = [], allTools = [] }: Subage
   )
 
   useEffect(() => {
-    if (!isRunning) return
-    const interval = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(interval)
-  }, [isRunning])
-
-  useEffect(() => {
     if (!hasAwaitingChildQuestion) return
     setIsOpen(true)
   }, [hasAwaitingChildQuestion])
 
-  const startedAtMs = tool.startedAt ? Date.parse(tool.startedAt) : null
-  const endedAtMs = tool.endedAt ? Date.parse(tool.endedAt) : null
-  const elapsedMs = startedAtMs
-    ? Math.max(0, (isRunning ? now : (endedAtMs || now)) - startedAtMs)
-    : null
+  // Compute elapsed time lazily - updates when tool.startedAt/endedAt change
+  // For running tasks, shows snapshot (doesn't tick every second)
+  const elapsedMs = useMemo(() => {
+    if (!tool.startedAt) return null
+    const start = Date.parse(tool.startedAt)
+    const end = tool.endedAt ? Date.parse(tool.endedAt) : Date.now()
+    return Math.max(0, end - start)
+  }, [tool.startedAt, tool.endedAt])
 
   const formatElapsed = (ms: number) => {
     const totalSeconds = Math.floor(ms / 1000)
@@ -199,3 +195,12 @@ export function SubagentDisplay({ tool, childTools = [], allTools = [] }: Subage
     </Collapsible>
   )
 }
+
+export const SubagentDisplay = memo(SubagentDisplayInner, (prev, next) => {
+  if (prev.tool !== next.tool) return false
+  if (prev.childTools.length !== next.childTools.length) return false
+  for (let i = 0; i < prev.childTools.length; i++) {
+    if (prev.childTools[i] !== next.childTools[i]) return false
+  }
+  return true
+})

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Conversation,
   ConversationContent,
@@ -161,6 +161,12 @@ export function ChatView({
       } catch (err) {
         // Error will be captured by hook
       }
+    } else if (command.id === 'init') {
+      try {
+        await runSlashCommand(claudeSessionId, workingDirectory, '/init', 'init')
+      } catch (err) {
+        // Error will be captured by hook
+      }
     }
   }, [claudeSessionId, workingDirectory, runSlashCommand, clearMessages, updateSession, uiSessionId, usage, appendSessionEvent])
 
@@ -171,8 +177,11 @@ export function ChatView({
 
   // Get compaction events for rendering dividers in message list
   const sessionEvents = useSessionEvents(uiSessionId)
-  const compactionEvents = sessionEvents.filter(
-    (e): e is Extract<SessionEvent, { type: 'compacted' }> => e.type === 'compacted'
+  const compactionEvents = useMemo(() =>
+    sessionEvents.filter(
+      (e): e is Extract<SessionEvent, { type: 'compacted' }> => e.type === 'compacted'
+    ),
+    [sessionEvents]
   )
 
   // Conversation search

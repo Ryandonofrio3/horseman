@@ -11,7 +11,7 @@ Native macOS GUI for Claude Code.
 
 ## Install
 
-1. Download `Horseman.dmg` from [Releases](https://github.com/ryandonofrio/horseman/releases)
+1. Download `Horseman.dmg` from [Releases](https://github.com/ryandonofrio3/horseman/releases)
 2. Open the .dmg and drag Horseman to Applications
 3. **First launch:** Right-click the app → Open → Open (bypasses Gatekeeper warning for unsigned apps)
 

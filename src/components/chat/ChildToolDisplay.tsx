@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import type { ToolCall } from '@/domain'
 import { Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -71,7 +72,7 @@ function StatusIcon({ status }: { status: ToolCall['status'] }) {
   }
 }
 
-export function ChildToolDisplay({ tool }: ChildToolDisplayProps) {
+export const ChildToolDisplay = memo(function ChildToolDisplay({ tool }: ChildToolDisplayProps) {
   const preview = getToolPreview(tool)
   const isRunning = tool.status === 'running'
   const isError = tool.status === 'error'
@@ -103,4 +104,4 @@ export function ChildToolDisplay({ tool }: ChildToolDisplayProps) {
       )}
     </div>
   )
-}
+})

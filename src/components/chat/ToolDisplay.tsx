@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   Tool,
   ToolHeader,
@@ -78,7 +79,7 @@ function getToolPreview(tool: ToolCall): string | undefined {
   }
 }
 
-export function ToolDisplay({ tool, isStreaming = false, allTools = [] }: ToolDisplayProps) {
+function ToolDisplayInner({ tool, isStreaming = false, allTools = [] }: ToolDisplayProps) {
   // Hide TodoWrite - we have a dedicated UI for it
   if (tool.name === 'TodoWrite') return null
 
@@ -195,3 +196,17 @@ function ToolOutputContent({ tool }: { tool: ToolCall }) {
     </div>
   )
 }
+
+export const ToolDisplay = memo(ToolDisplayInner, (prev, next) => {
+  // Re-render only when relevant data changes
+  if (prev.tool !== next.tool) return false
+  if (prev.isStreaming !== next.isStreaming) return false
+
+  // For Task tools, check if child tools changed
+  if (prev.tool.name === 'Task') {
+    const prevChildCount = prev.allTools.filter(t => t.parentToolId === prev.tool.id).length
+    const nextChildCount = next.allTools.filter(t => t.parentToolId === next.tool.id).length
+    if (prevChildCount !== nextChildCount) return false
+  }
+  return true
+})

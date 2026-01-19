@@ -103,11 +103,11 @@ export function MessageList({
   const showTypingIndicator = isWorking && (!lastMessage || lastMessage.role === 'user')
 
   // Use provided allTools (from store, includes subagent tools) or fallback to flatMap
-  const allToolsFromMessages = useMemo(
-    () => messages.flatMap((m) => m.toolCalls || []),
-    [messages]
-  )
-  const allTools = allToolsProp ?? allToolsFromMessages
+  // Early return when prop provided to skip unnecessary flatMap computation
+  const allTools = useMemo(() => {
+    if (allToolsProp) return allToolsProp
+    return messages.flatMap((m) => m.toolCalls || [])
+  }, [messages, allToolsProp])
   const hasRunningTask = useMemo(
     () => allTools.some(
       (tool) => tool.name === 'Task' && (tool.status === 'pending' || tool.status === 'running')
@@ -115,20 +115,23 @@ export function MessageList({
     [allTools]
   )
 
-  // Filter messages first to avoid fragment with many nulls
-  const visibleMessages = messages.filter((message) => {
-    if (message.role === 'system') return true
-    const hasText = !!message.text?.trim()
-    const hasFileBlocks = (message.fileBlocks?.length ?? 0) > 0
-    const messageTools = message.toolCalls || []
-    const topLevelTools = messageTools.filter((tool) => {
-      if (tool.parentToolId) return false
-      if (hasRunningTask && tool.name !== 'Task') return false
-      return true
-    })
-    const hasTools = topLevelTools.length > 0
-    return hasText || hasTools || hasFileBlocks
-  })
+  // Filter messages - memoized to avoid recalculation on unrelated re-renders
+  const visibleMessages = useMemo(() =>
+    messages.filter((message) => {
+      if (message.role === 'system') return true
+      const hasText = !!message.text?.trim()
+      const hasFileBlocks = (message.fileBlocks?.length ?? 0) > 0
+      const messageTools = message.toolCalls || []
+      const topLevelTools = messageTools.filter((tool) => {
+        if (tool.parentToolId) return false
+        if (hasRunningTask && tool.name !== 'Task') return false
+        return true
+      })
+      const hasTools = topLevelTools.length > 0
+      return hasText || hasTools || hasFileBlocks
+    }),
+    [messages, hasRunningTask]
+  )
 
   // Track which compaction events we've already rendered
   const renderedCompactions = new Set<string>()

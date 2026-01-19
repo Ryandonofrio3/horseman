@@ -6,5 +6,8 @@
 # will have schema files for capabilities auto-completion
 /gen/
 
+# External binaries (built during release)
+/binaries/
+
 # Lock file (use workspace Cargo.lock at root)
 Cargo.lock

@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   title: "Horseman — Native GUI for Claude Code",
   description: "A beautiful, native macOS interface for Claude Code. Not a terminal wrapper — treats the CLI as an engine.",
   keywords: ["Claude", "Claude Code", "AI", "macOS", "Tauri", "GUI", "Developer Tools"],
-  authors: [{ name: "Ryan Donofrio" }],
+  authors: [{ name: "Ryan D'Onofrio" }],
   openGraph: {
     title: "Horseman — Native GUI for Claude Code",
     description: "A beautiful, native macOS interface for Claude Code.",

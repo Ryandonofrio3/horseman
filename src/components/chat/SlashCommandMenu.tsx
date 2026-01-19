@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Minimize2, Trash2 } from 'lucide-react'
+import { FileText, Minimize2, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface SlashCommand {
@@ -22,6 +22,12 @@ const SLASH_COMMANDS: SlashCommand[] = [
     name: '/compact',
     description: 'Compress conversation context',
     icon: <Minimize2 className="h-4 w-4" />,
+  },
+  {
+    id: 'init',
+    name: '/init',
+    description: 'Initialize project with CLAUDE.md',
+    icon: <FileText className="h-4 w-4" />,
   },
 ]
 

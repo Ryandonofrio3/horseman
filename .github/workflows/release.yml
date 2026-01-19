@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v0.1.0-alpha.1)'
+        required: true
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: bun install
+
+      - name: Build horseman-mcp (universal binary)
+        run: |
+          # Build for both architectures
+          cargo build --release -p horseman-mcp --target aarch64-apple-darwin
+          cargo build --release -p horseman-mcp --target x86_64-apple-darwin
+
+          # Create universal binary
+          mkdir -p src-tauri/binaries
+          lipo -create \
+            target/aarch64-apple-darwin/release/horseman-mcp \
+            target/x86_64-apple-darwin/release/horseman-mcp \
+            -output src-tauri/binaries/horseman-mcp-universal-apple-darwin
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.event.inputs.version || github.ref_name }}
+          releaseName: 'Horseman ${{ github.event.inputs.version || github.ref_name }}'
+          releaseBody: |
+            ## Installation (macOS)
+
+            1. Download `Horseman_x.x.x_universal.dmg`
+            2. Open the DMG and drag Horseman to Applications
+            3. **First launch:** Right-click the app → Open → Open (required for unsigned apps)
+
+            ### Requirements
+            - macOS 10.15+
+            - [Claude Code CLI](https://github.com/anthropics/claude-code) installed
+
+            ⚠️ This is an early alpha release. Expect bugs!
+          releaseDraft: true
+          prerelease: true
+          args: --target universal-apple-darwin
+
+  # Future: Add Windows/Linux builds
+  # build-windows:
+  #   runs-on: windows-latest
+  #   ...
