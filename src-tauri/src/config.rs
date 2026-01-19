@@ -5,6 +5,9 @@ use std::sync::Mutex;
 use once_cell::sync::Lazy;
 use crate::debug_log;
 
+/// Cached resolved claude binary path
+static RESOLVED_CLAUDE_BINARY: Lazy<Mutex<Option<String>>> = Lazy::new(|| Mutex::new(None));
+
 /// User-configurable settings for Horseman
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
@@ -129,9 +132,77 @@ pub fn update_config(updates: HorsemanConfig) -> Result<HorsemanConfig, String> 
 
 // --- Accessor functions for other modules ---
 
+/// Common locations where claude CLI might be installed
+fn claude_search_paths() -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+
+    if let Some(home) = dirs::home_dir() {
+        // User-local installations (most common)
+        paths.push(home.join(".local/bin/claude"));
+        paths.push(home.join(".bun/bin/claude"));
+        paths.push(home.join(".npm-global/bin/claude"));
+        paths.push(home.join(".nvm/current/bin/claude"));
+        paths.push(home.join(".volta/bin/claude"));
+    }
+
+    // System-wide installations
+    paths.push(PathBuf::from("/usr/local/bin/claude"));
+    paths.push(PathBuf::from("/opt/homebrew/bin/claude"));
+    paths.push(PathBuf::from("/usr/bin/claude"));
+
+    paths
+}
+
+/// Find claude binary by checking common installation paths
+fn find_claude_binary() -> Option<String> {
+    for path in claude_search_paths() {
+        if path.exists() && path.is_file() {
+            let path_str = path.to_string_lossy().to_string();
+            debug_log!("CONFIG", "Found claude at: {}", path_str);
+            return Some(path_str);
+        }
+    }
+    None
+}
+
+/// Resolve the claude binary path (with caching)
+/// Priority: 1) User config, 2) Auto-detected path, 3) "claude" (PATH lookup)
+pub fn resolve_claude_binary() -> String {
+    // Check cache first
+    {
+        let cache = RESOLVED_CLAUDE_BINARY.lock().unwrap();
+        if let Some(ref path) = *cache {
+            return path.clone();
+        }
+    }
+
+    // 1) Check user config
+    if let Some(configured) = get_config().claude_binary {
+        debug_log!("CONFIG", "Using configured claude binary: {}", configured);
+        let mut cache = RESOLVED_CLAUDE_BINARY.lock().unwrap();
+        *cache = Some(configured.clone());
+        return configured;
+    }
+
+    // 2) Auto-detect from common paths
+    if let Some(found) = find_claude_binary() {
+        let mut cache = RESOLVED_CLAUDE_BINARY.lock().unwrap();
+        *cache = Some(found.clone());
+        return found;
+    }
+
+    // 3) Fall back to PATH lookup (works in dev, fails in packaged app)
+    debug_log!("CONFIG", "Claude not found in common paths, falling back to PATH lookup");
+    let fallback = "claude".to_string();
+    let mut cache = RESOLVED_CLAUDE_BINARY.lock().unwrap();
+    *cache = Some(fallback.clone());
+    fallback
+}
+
 /// Get the Claude binary path (default: "claude")
+/// DEPRECATED: Use resolve_claude_binary() instead
 pub fn claude_binary() -> String {
-    get_config().claude_binary.unwrap_or_else(|| "claude".to_string())
+    resolve_claude_binary()
 }
 
 /// Get the Claude projects directory (default: ~/.claude/projects)

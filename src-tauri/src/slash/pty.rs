@@ -1,6 +1,7 @@
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use std::io::{Read, Write};
 use std::path::Path;
+use crate::config;
 
 /// Active PTY session for running slash commands
 pub struct PtySession {
@@ -26,7 +27,8 @@ impl PtySession {
             })
             .map_err(|e| format!("Failed to open PTY: {}", e))?;
 
-        let mut cmd = CommandBuilder::new("claude");
+        let claude_bin = config::resolve_claude_binary();
+        let mut cmd = CommandBuilder::new(&claude_bin);
         cmd.arg("--resume");
         cmd.arg(claude_session_id);
         cmd.cwd(Path::new(working_directory));
