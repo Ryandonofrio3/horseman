@@ -45,6 +45,20 @@ export function DiffDisplay({
     [filename, newContent]
   )
 
+  const diffOptions = useMemo(
+    () => ({
+      theme: { dark: 'github-dark', light: 'github-light' },
+      themeType,
+      diffStyle,
+      diffIndicators: 'bars' as const,
+      hunkSeparators: 'line-info' as const,
+      overflow: 'scroll' as const,
+      disableFileHeader: true,
+      unsafeCSS: DIFFS_UNSAFE_CSS_FALLBACK,
+    }),
+    [themeType, diffStyle]
+  )
+
   // If both contents are empty, show a message
   if (!oldContent && !newContent) {
     return (
@@ -68,16 +82,7 @@ export function DiffDisplay({
       <MultiFileDiff
         oldFile={oldFile}
         newFile={newFile}
-        options={{
-          theme: { dark: 'github-dark', light: 'github-light' },
-          themeType,
-          diffStyle,
-          diffIndicators: 'bars',
-          hunkSeparators: 'line-info',
-          overflow: 'scroll',
-          disableFileHeader: true,
-          unsafeCSS: DIFFS_UNSAFE_CSS_FALLBACK,
-        }}
+        options={diffOptions}
       />
     </div>
   )

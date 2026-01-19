@@ -76,30 +76,38 @@ export function ChatView({
 
   // Slash command handling (for /compact only - /clear is immediate)
   const { isRunning, activeCommand, error: slashError, runCommand: runSlashCommand } = useSlashCommand()
-  const [compactSessionId, setCompactSessionId] = useState<string | null>(null)
-  const [compactCompleted, setCompactCompleted] = useState(false)
 
-  // "Conversation cleared" state - persists until new message
-  const [wasCleared, setWasCleared] = useState(false)
+  // Consolidated command state for /compact and /clear
+  interface CommandState {
+    type: 'compact' | 'clear' | null
+    sessionId: string | null
+    completed: boolean
+  }
+  const [commandState, setCommandState] = useState<CommandState>({
+    type: null,
+    sessionId: null,
+    completed: false,
+  })
+
+  // Derive wasCleared from commandState
+  const wasCleared = commandState.type === 'clear' && commandState.completed
 
   // Reset slash state when session changes
   useEffect(() => {
-    setCompactSessionId(null)
-    setCompactCompleted(false)
-    setWasCleared(false)
+    setCommandState({ type: null, sessionId: null, completed: false })
   }, [claudeSessionId])
 
   // Clear the "wasCleared" state when messages arrive
   useEffect(() => {
     if (hasMessages && wasCleared) {
-      setWasCleared(false)
+      setCommandState(prev => ({ ...prev, type: null, completed: false }))
     }
   }, [hasMessages, wasCleared])
 
   // Track when compact completes and log session events
   useEffect(() => {
-    if (!isRunning && compactSessionId === claudeSessionId && compactSessionId !== null && activeCommand === 'compact') {
-      setCompactCompleted(true)
+    if (!isRunning && commandState.sessionId === claudeSessionId && commandState.sessionId !== null && activeCommand === 'compact') {
+      setCommandState(prev => ({ ...prev, completed: true }))
 
       // Log session events for the compaction
       const timestamp = new Date().toISOString()
@@ -121,15 +129,19 @@ export function ChatView({
         })
       }
     }
-  }, [isRunning, compactSessionId, claudeSessionId, activeCommand, slashError, uiSessionId, appendSessionEvent])
+  }, [isRunning, commandState.sessionId, claudeSessionId, activeCommand, slashError, uiSessionId, appendSessionEvent])
 
   // Derive compact state (only for /compact, not /clear)
   const compactState: SlashCommandState | null = (() => {
-    if (isRunning && activeCommand === 'compact' && compactSessionId === claudeSessionId) return 'running'
-    if (slashError && compactSessionId === claudeSessionId) return 'error'
-    if (compactCompleted) return 'completed'
+    if (isRunning && activeCommand === 'compact' && commandState.sessionId === claudeSessionId) return 'running'
+    if (slashError && commandState.sessionId === claudeSessionId) return 'error'
+    if (commandState.type === 'compact' && commandState.completed) return 'completed'
     return null
   })()
+
+  const handleRemoveFile = useCallback((id: string) => {
+    setPendingFiles(prev => prev.filter(f => f.id !== id))
+  }, [])
 
   const handleSlashCommand = useCallback(async (command: SlashCommand) => {
     if (!claudeSessionId) return
@@ -141,7 +153,7 @@ export function ChatView({
         currentTodos: [],
         usage: usage ? { ...usage, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 } : undefined,
       })
-      setWasCleared(true)
+      setCommandState({ type: 'clear', sessionId: claudeSessionId, completed: true })
 
       // Log the slash command event
       appendSessionEvent(uiSessionId, {
@@ -154,19 +166,18 @@ export function ChatView({
       // Fire and forget - PTY runs in background to sync with Claude
       runSlashCommand(claudeSessionId, workingDirectory, '/clear', 'clear').catch(() => {})
     } else if (command.id === 'compact') {
-      setCompactSessionId(claudeSessionId)
-      setCompactCompleted(false)
+      setCommandState({ type: 'compact', sessionId: claudeSessionId, completed: false })
       try {
         await runSlashCommand(claudeSessionId, workingDirectory, '/compact Focus on current task, decisions, and next steps only', 'compact')
       } catch (err) {
         // Error will be captured by hook
       }
-    } else if (command.id === 'init') {
-      try {
-        await runSlashCommand(claudeSessionId, workingDirectory, '/init', 'init')
-      } catch (err) {
-        // Error will be captured by hook
-      }
+    // } else if (command.id === 'init') {
+    //   try {
+    //     await runSlashCommand(claudeSessionId, workingDirectory, '/init', 'init')
+    //   } catch (err) {
+    //     // Error will be captured by hook
+    //   }
     }
   }, [claudeSessionId, workingDirectory, runSlashCommand, clearMessages, updateSession, uiSessionId, usage, appendSessionEvent])
 
@@ -299,7 +310,7 @@ export function ChatView({
                 key={file.id}
                 file={file}
                 workingDirectory={workingDirectory}
-                onRemove={(id) => setPendingFiles(prev => prev.filter(f => f.id !== id))}
+                onRemove={handleRemoveFile}
               />
             ))}
           </div>

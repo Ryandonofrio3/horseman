@@ -10,6 +10,10 @@ import {
   useMemo,
 } from "react";
 
+// Static animation values - defined outside component to prevent recreation
+const SHIMMER_ANIMATE = { backgroundPosition: "0% center" } as const;
+const SHIMMER_INITIAL = { backgroundPosition: "100% center" } as const;
+
 export type TextShimmerProps = {
   children: string;
   as?: ElementType;
@@ -34,27 +38,36 @@ const ShimmerComponent = ({
     [children, spread]
   );
 
+  const shimmerStyle = useMemo(
+    () =>
+      ({
+        "--spread": `${dynamicSpread}px`,
+        backgroundImage:
+          "var(--bg), linear-gradient(var(--color-muted-foreground), var(--color-muted-foreground))",
+      }) as CSSProperties,
+    [dynamicSpread]
+  );
+
+  const shimmerTransition = useMemo(
+    () => ({
+      repeat: Number.POSITIVE_INFINITY,
+      duration,
+      ease: "linear" as const,
+    }),
+    [duration]
+  );
+
   return (
     <MotionComponent
-      animate={{ backgroundPosition: "0% center" }}
+      animate={SHIMMER_ANIMATE}
       className={cn(
         "relative inline-block bg-[length:250%_100%,auto] bg-clip-text text-transparent",
         "[--bg:linear-gradient(90deg,#0000_calc(50%-var(--spread)),var(--color-background),#0000_calc(50%+var(--spread)))] [background-repeat:no-repeat,padding-box]",
         className
       )}
-      initial={{ backgroundPosition: "100% center" }}
-      style={
-        {
-          "--spread": `${dynamicSpread}px`,
-          backgroundImage:
-            "var(--bg), linear-gradient(var(--color-muted-foreground), var(--color-muted-foreground))",
-        } as CSSProperties
-      }
-      transition={{
-        repeat: Number.POSITIVE_INFINITY,
-        duration,
-        ease: "linear",
-      }}
+      initial={SHIMMER_INITIAL}
+      style={shimmerStyle}
+      transition={shimmerTransition}
     >
       {children}
     </MotionComponent>

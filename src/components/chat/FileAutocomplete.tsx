@@ -7,7 +7,7 @@
  *
  * Perf: Debounces IPC calls to avoid thrashing on fast typing.
  */
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { FileText, Folder } from 'lucide-react'
 import { ipc, FileEntry } from '@/lib/ipc'
@@ -23,6 +23,7 @@ interface FileAutocompleteProps {
   onSelect: (filePath: string, isDir: boolean) => void
   onClose: () => void
   onFilesChange: (count: number) => void
+  onSelectionChange?: (file: FileEntry | null) => void
 }
 
 export function FileAutocomplete({
@@ -33,6 +34,7 @@ export function FileAutocomplete({
   onSelect,
   onClose,
   onFilesChange,
+  onSelectionChange,
 }: FileAutocompleteProps) {
   const [files, setFiles] = useState<FileEntry[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -87,16 +89,10 @@ export function FileAutocomplete({
     }
   }, [selectedIndex])
 
-  // Expose selected file for parent to use on Enter
+  // Notify parent of selection change
   useEffect(() => {
-    if (files[selectedIndex]) {
-      // Store on window for parent to access (simple approach)
-      ;(window as unknown as Record<string, unknown>).__autocompleteSelected = {
-        path: files[selectedIndex].path,
-        isDir: files[selectedIndex].is_dir,
-      }
-    }
-  }, [files, selectedIndex])
+    onSelectionChange?.(files[selectedIndex] ?? null)
+  }, [files, selectedIndex, onSelectionChange])
 
   const handleSelect = useCallback((file: FileEntry) => {
     onSelect(file.path, file.is_dir)
@@ -115,6 +111,12 @@ export function FileAutocomplete({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [onClose])
 
+  const dropdownStyle = useMemo(() => ({
+    top: position ? position.top - 8 : 0,
+    left: position?.left ?? 0,
+    transform: 'translateY(-100%)' as const,
+  }), [position?.top, position?.left])
+
   if (!position) return null
 
   const dropdown = (
@@ -124,11 +126,7 @@ export function FileAutocomplete({
         'fixed z-50 w-96 max-h-64 overflow-auto',
         'bg-popover border rounded-lg shadow-lg'
       )}
-      style={{
-        top: position.top - 8,
-        left: position.left,
-        transform: 'translateY(-100%)',
-      }}
+      style={dropdownStyle}
       ref={listRef}
     >
       {isLoading ? (

@@ -23,12 +23,12 @@ const SLASH_COMMANDS: SlashCommand[] = [
     description: 'Compress conversation context',
     icon: <Minimize2 className="h-4 w-4" />,
   },
-  {
-    id: 'init',
-    name: '/init',
-    description: 'Initialize project with CLAUDE.md',
-    icon: <FileText className="h-4 w-4" />,
-  },
+  // {
+  //   id: 'init',
+  //   name: '/init',
+  //   description: 'Initialize project with CLAUDE.md',
+  //   icon: <FileText className="h-4 w-4" />,
+  // },
 ]
 
 interface SlashCommandMenuProps {
@@ -38,6 +38,7 @@ interface SlashCommandMenuProps {
   onSelect: (command: SlashCommand) => void
   onClose: () => void
   onCommandsChange: (count: number) => void
+  onSelectionChange?: (command: SlashCommand | null) => void
 }
 
 export function SlashCommandMenu({
@@ -47,6 +48,7 @@ export function SlashCommandMenu({
   onSelect,
   onClose,
   onCommandsChange,
+  onSelectionChange,
 }: SlashCommandMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -61,13 +63,10 @@ export function SlashCommandMenu({
     onCommandsChange(filteredCommands.length)
   }, [filteredCommands.length, onCommandsChange])
 
-  // Expose selected command for keyboard selection
+  // Notify parent of selection changes for keyboard navigation
   useEffect(() => {
-    const selected = filteredCommands[selectedIndex]
-    if (selected) {
-      ;(window as unknown as Record<string, SlashCommand>).__slashCommandSelected = selected
-    }
-  }, [selectedIndex, filteredCommands])
+    onSelectionChange?.(filteredCommands[selectedIndex] ?? null)
+  }, [selectedIndex, filteredCommands, onSelectionChange])
 
   // Click outside to close
   useEffect(() => {

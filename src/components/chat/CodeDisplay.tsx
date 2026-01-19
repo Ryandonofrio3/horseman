@@ -31,17 +31,19 @@ export function CodeDisplay({ code, filename, className, cacheKey }: CodeDisplay
     [filename, code, cacheKey]
   )
 
+  const fileOptions = useMemo(
+    () => ({
+      theme: { dark: 'github-dark', light: 'github-light' },
+      themeType,
+      overflow: 'scroll' as const,
+      unsafeCSS: DIFFS_UNSAFE_CSS_FALLBACK,
+    }),
+    [themeType]
+  )
+
   return (
     <div className={cn('rounded-md overflow-hidden', className)}>
-      <File
-        file={file}
-        options={{
-          theme: { dark: 'github-dark', light: 'github-light' },
-          themeType,
-          overflow: 'scroll',
-          unsafeCSS: DIFFS_UNSAFE_CSS_FALLBACK,
-        }}
-      />
+      <File file={file} options={fileOptions} />
     </div>
   )
 }

@@ -19,8 +19,25 @@ export function PlanOverlay() {
   const activePlan = useActivePlan()
   const resolvePlan = useStore((s) => s.resolvePlan)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [showFeedback, setShowFeedback] = useState(false)
-  const [feedback, setFeedback] = useState('')
+
+  // Consolidate feedback state
+  const [feedbackState, setFeedbackState] = useState<{ isOpen: boolean; text: string }>({
+    isOpen: false,
+    text: '',
+  })
+
+  // Helper functions
+  const openFeedback = useCallback(() => {
+    setFeedbackState({ isOpen: true, text: '' })
+  }, [])
+
+  const closeFeedback = useCallback(() => {
+    setFeedbackState({ isOpen: false, text: '' })
+  }, [])
+
+  const updateFeedbackText = useCallback((text: string) => {
+    setFeedbackState((prev) => ({ ...prev, text }))
+  }, [])
 
   const handleAccept = useCallback(async () => {
     if (!activePlan || isProcessing) return
@@ -53,17 +70,16 @@ export function PlanOverlay() {
     setIsProcessing(true)
     try {
       await ipc.permissions.respond(activePlan.toolId, false, {
-        message: feedback || 'Plan rejected by user',
+        message: feedbackState.text || 'Plan rejected by user',
       })
-      resolvePlan('reject', feedback)
+      resolvePlan('reject', feedbackState.text)
     } catch (err) {
       console.error('Failed to reject plan:', err)
     } finally {
       setIsProcessing(false)
-      setShowFeedback(false)
-      setFeedback('')
+      closeFeedback()
     }
-  }, [activePlan, isProcessing, feedback, resolvePlan])
+  }, [activePlan, isProcessing, feedbackState.text, resolvePlan, closeFeedback])
 
   if (!activePlan) return null
 
@@ -82,11 +98,11 @@ export function PlanOverlay() {
           <MessageResponse>{activePlan.content}</MessageResponse>
         </PlanContent>
         <PlanFooter className="flex flex-col gap-3 pt-3 border-t">
-          {showFeedback ? (
+          {feedbackState.isOpen ? (
             <div className="flex flex-col gap-2 w-full">
               <textarea
-                value={feedback}
-                onChange={(e) => setFeedback(e.target.value)}
+                value={feedbackState.text}
+                onChange={(e) => updateFeedbackText(e.target.value)}
                 placeholder="What should Claude do differently?"
                 className="w-full p-3 rounded-md border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                 rows={3}
@@ -96,10 +112,7 @@ export function PlanOverlay() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    setShowFeedback(false)
-                    setFeedback('')
-                  }}
+                  onClick={closeFeedback}
                   disabled={isProcessing}
                 >
                   Cancel
@@ -138,7 +151,7 @@ export function PlanOverlay() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowFeedback(true)}
+                onClick={openFeedback}
                 disabled={isProcessing}
               >
                 <Pencil className="h-4 w-4" />

@@ -113,6 +113,10 @@ export function PermissionCard({ permission, queueTotal }: PermissionCardProps) 
     }
   }, [permission.requestId, permission.toolName, permission.toolInput.file_path, isProcessing, removePendingPermission, eventSessionId, appendSessionEvent])
 
+  const handleAllowOnce = useCallback(() => handleAllow(false), [handleAllow])
+  const handleAllowSession = useCallback(() => handleAllow(true), [handleAllow])
+  const handleDenyClick = useCallback(() => handleDeny(), [handleDeny])
+
   const inputPreview = formatToolInput(permission.toolInput)
   const isLongInput = inputPreview.length > 100
   const timerUrgent = secondsLeft <= 30
@@ -166,7 +170,7 @@ export function PermissionCard({ permission, queueTotal }: PermissionCardProps) 
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => handleAllow(false)}
+            onClick={handleAllowOnce}
             disabled={isProcessing}
             className="h-7 px-3 text-xs font-medium text-green-600 hover:text-green-700 hover:bg-green-500/10"
           >
@@ -177,7 +181,7 @@ export function PermissionCard({ permission, queueTotal }: PermissionCardProps) 
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => handleAllow(true)}
+            onClick={handleAllowSession}
             disabled={isProcessing}
             className="h-7 px-3 text-xs font-medium text-green-600 hover:text-green-700 hover:bg-green-500/10"
           >
@@ -188,7 +192,7 @@ export function PermissionCard({ permission, queueTotal }: PermissionCardProps) 
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => handleDeny()}
+            onClick={handleDenyClick}
             disabled={isProcessing}
             className="h-7 px-3 text-xs font-medium text-red-500 hover:text-red-600 hover:bg-red-500/10"
           >

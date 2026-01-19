@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, type ChangeEvent, type ClipboardEvent, type KeyboardEvent } from 'react'
+import type { FileEntry } from '@/lib/ipc'
 import {
   PromptInput,
   PromptInputTextarea,
@@ -51,6 +52,23 @@ interface ChatInputProps {
   onSlashCommand?: (command: SlashCommand) => void
 }
 
+// Unified menu state for @ autocomplete and / slash commands
+interface MenuState {
+  type: '@' | '/' | null
+  query: string
+  triggerIndex: number
+  selectedIndex: number
+  position: { top: number; left: number } | null
+}
+
+const initialMenuState: MenuState = {
+  type: null,
+  query: '',
+  triggerIndex: -1,
+  selectedIndex: 0,
+  position: null,
+}
+
 // Inner component that uses the provider context
 function ChatInputInner({
   workingDirectory,
@@ -65,21 +83,36 @@ function ChatInputInner({
   const controller = usePromptInputController()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // @ autocomplete state
-  const [showAutocomplete, setShowAutocomplete] = useState(false)
-  const [autocompleteQuery, setAutocompleteQuery] = useState('')
-  const [autocompletePosition, setAutocompletePosition] = useState<{ top: number; left: number } | null>(null)
-  const [atTriggerIndex, setAtTriggerIndex] = useState<number>(-1)
-  const [selectedIndex, setSelectedIndex] = useState(0)
+  // Unified menu state for @ and / triggers
+  const [menu, setMenu] = useState<MenuState>(initialMenuState)
   const [fileCount, setFileCount] = useState(0)
-
-  // / slash command state
-  const [showSlashMenu, setShowSlashMenu] = useState(false)
-  const [slashQuery, setSlashQuery] = useState('')
-  const [slashTriggerIndex, setSlashTriggerIndex] = useState<number>(-1)
-  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0)
   const [slashCommandCount, setSlashCommandCount] = useState(0)
-  const [slashPosition, setSlashPosition] = useState<{ top: number; left: number } | null>(null)
+
+  // Refs for selected items (replaces window mutation anti-pattern)
+  const selectedFileRef = useRef<FileEntry | null>(null)
+  const selectedSlashCommandRef = useRef<SlashCommand | null>(null)
+
+  // Menu helpers
+  const closeMenu = useCallback(() => {
+    setMenu(initialMenuState)
+  }, [])
+
+  const openMenu = useCallback((
+    type: '@' | '/',
+    query: string,
+    triggerIndex: number,
+    position: { top: number; left: number }
+  ) => {
+    setMenu({ type, query, triggerIndex, selectedIndex: 0, position })
+  }, [])
+
+  const updateMenuQuery = useCallback((query: string) => {
+    setMenu(prev => ({ ...prev, query }))
+  }, [])
+
+  const updateMenuSelection = useCallback((selectedIndex: number) => {
+    setMenu(prev => ({ ...prev, selectedIndex }))
+  }, [])
 
   const handlePaste = useCallback((e: ClipboardEvent<HTMLTextAreaElement>) => {
     const text = e.clipboardData?.getData('text/plain')
@@ -150,13 +183,12 @@ function ChatInputInner({
     const cursorPos = textarea?.selectionStart || value.length
 
     // Remove the @query from input
-    const before = value.slice(0, atTriggerIndex)
+    const before = value.slice(0, menu.triggerIndex)
     const after = value.slice(cursorPos)
     const newValue = before + after
 
     controller.textInput.setInput(newValue.trim())
-    setShowAutocomplete(false)
-    setSelectedIndex(0)
+    closeMenu()
 
     // Add as pending file reference
     const newFile: PendingFile = {
@@ -178,7 +210,7 @@ function ChatInputInner({
         textarea.setSelectionRange(newPos, newPos)
       }
     }, 0)
-  }, [controller.textInput, atTriggerIndex, setPendingFiles])
+  }, [controller.textInput, menu.triggerIndex, setPendingFiles, closeMenu])
 
   // Slash command handlers - must be defined before handleKeyDown
   const handleSelectSlashCommand = useCallback((command: SlashCommand) => {
@@ -187,13 +219,12 @@ function ChatInputInner({
     const cursorPos = textarea?.selectionStart || value.length
 
     // Remove the /query from input
-    const before = value.slice(0, slashTriggerIndex)
+    const before = value.slice(0, menu.triggerIndex)
     const after = value.slice(cursorPos)
     const newValue = before + after
 
     controller.textInput.setInput(newValue.trim())
-    setShowSlashMenu(false)
-    setSlashSelectedIndex(0)
+    closeMenu()
 
     // Trigger the command
     onSlashCommand?.(command)
@@ -204,34 +235,29 @@ function ChatInputInner({
         textarea.focus()
       }
     }, 0)
-  }, [controller.textInput, slashTriggerIndex, onSlashCommand])
-
-  const handleCloseSlashMenu = useCallback(() => {
-    setShowSlashMenu(false)
-    setSlashSelectedIndex(0)
-  }, [])
+  }, [controller.textInput, menu.triggerIndex, onSlashCommand, closeMenu])
 
   const handleSlashCommandsChange = useCallback((count: number) => {
     setSlashCommandCount(count)
-    setSlashSelectedIndex(0)
-  }, [])
+    updateMenuSelection(0)
+  }, [updateMenuSelection])
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Handle slash menu navigation
-    if (showSlashMenu) {
+    if (menu.type === '/') {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
-        setSlashSelectedIndex(prev => (prev + 1) % Math.max(1, slashCommandCount))
+        updateMenuSelection((menu.selectedIndex + 1) % Math.max(1, slashCommandCount))
         return
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault()
-        setSlashSelectedIndex(prev => (prev - 1 + slashCommandCount) % Math.max(1, slashCommandCount))
+        updateMenuSelection((menu.selectedIndex - 1 + slashCommandCount) % Math.max(1, slashCommandCount))
         return
       }
       if ((e.key === 'Enter' || e.key === 'Tab') && slashCommandCount > 0) {
         e.preventDefault()
-        const selected = (window as unknown as Record<string, SlashCommand>).__slashCommandSelected
+        const selected = selectedSlashCommandRef.current
         if (selected) {
           handleSelectSlashCommand(selected)
         }
@@ -239,34 +265,33 @@ function ChatInputInner({
       }
       if (e.key === 'Escape') {
         e.preventDefault()
-        setShowSlashMenu(false)
-        setSlashSelectedIndex(0)
+        closeMenu()
         return
       }
     }
 
     // Handle @ autocomplete navigation
-    if (!showAutocomplete) return
+    if (menu.type !== '@') return
 
     // Arrow navigation
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setSelectedIndex(prev => (prev + 1) % Math.max(1, fileCount))
+      updateMenuSelection((menu.selectedIndex + 1) % Math.max(1, fileCount))
       return
     }
 
     if (e.key === 'ArrowUp') {
       e.preventDefault()
-      setSelectedIndex(prev => (prev - 1 + fileCount) % Math.max(1, fileCount))
+      updateMenuSelection((menu.selectedIndex - 1 + fileCount) % Math.max(1, fileCount))
       return
     }
 
     // Enter selects current item
     if (e.key === 'Enter' && fileCount > 0) {
       e.preventDefault()
-      const selected = (window as unknown as Record<string, { path: string; isDir: boolean }>).__autocompleteSelected
+      const selected = selectedFileRef.current
       if (selected) {
-        handleSelectFile(selected.path, selected.isDir)
+        handleSelectFile(selected.path, selected.is_dir)
       }
       return
     }
@@ -274,9 +299,9 @@ function ChatInputInner({
     // Tab also selects
     if (e.key === 'Tab' && fileCount > 0) {
       e.preventDefault()
-      const selected = (window as unknown as Record<string, { path: string; isDir: boolean }>).__autocompleteSelected
+      const selected = selectedFileRef.current
       if (selected) {
-        handleSelectFile(selected.path, selected.isDir)
+        handleSelectFile(selected.path, selected.is_dir)
       }
       return
     }
@@ -284,45 +309,34 @@ function ChatInputInner({
     // Escape closes
     if (e.key === 'Escape') {
       e.preventDefault()
-      setShowAutocomplete(false)
-      setSelectedIndex(0)
+      closeMenu()
       return
     }
-  }, [showAutocomplete, showSlashMenu, fileCount, slashCommandCount, handleSelectFile, handleSelectSlashCommand])
+  }, [menu.type, menu.selectedIndex, fileCount, slashCommandCount, handleSelectFile, handleSelectSlashCommand, updateMenuSelection, closeMenu])
 
   const handleCloseAutocomplete = useCallback(() => {
-    setShowAutocomplete(false)
-    setSelectedIndex(0)
-  }, [])
+    closeMenu()
+  }, [closeMenu])
 
   const handleFilesChange = useCallback((count: number) => {
     setFileCount(count)
     // Reset selection when files change
-    setSelectedIndex(0)
-  }, [])
+    updateMenuSelection(0)
+  }, [updateMenuSelection])
 
   const handleChange = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
     const textarea = e.currentTarget
     const value = e.currentTarget.value
     const cursorPos = textarea.selectionStart
+    const rect = textarea.getBoundingClientRect()
+    const position = { top: rect.top, left: rect.left }
 
     // Check for / at start of input (slash commands)
     const slashMatch = value.match(/^\/(\S*)$/)
     if (slashMatch) {
       const query = slashMatch[1]
-      setSlashTriggerIndex(0)
-      setSlashQuery(query)
-      setShowSlashMenu(true)
-      setShowAutocomplete(false)
-      // Calculate position for menu
-      const rect = textarea.getBoundingClientRect()
-      setSlashPosition({
-        top: rect.top,
-        left: rect.left,
-      })
+      openMenu('/', query, 0, position)
       return
-    } else {
-      setShowSlashMenu(false)
     }
 
     // Find the @ trigger before cursor
@@ -332,21 +346,14 @@ function ChatInputInner({
     if (atMatch) {
       const query = atMatch[1]
       const atIndex = textBeforeCursor.lastIndexOf('@')
-
-      setAtTriggerIndex(atIndex)
-      setAutocompleteQuery(query)
-      setShowAutocomplete(true)
-
-      // Calculate position for popover (simplified - at textarea level)
-      const rect = textarea.getBoundingClientRect()
-      setAutocompletePosition({
-        top: rect.top,
-        left: rect.left,
-      })
+      openMenu('@', query, atIndex, position)
     } else {
-      setShowAutocomplete(false)
+      // Close menu if no trigger found
+      if (menu.type !== null) {
+        closeMenu()
+      }
     }
-  }, [])
+  }, [openMenu, closeMenu, menu.type])
 
   const folderName = workingDirectory?.split('/').pop() || 'No folder'
 
@@ -364,27 +371,29 @@ function ChatInputInner({
       />
 
       {/* @ Autocomplete */}
-      {showAutocomplete && (
+      {menu.type === '@' && (
         <FileAutocomplete
           workingDirectory={workingDirectory}
-          query={autocompleteQuery}
-          position={autocompletePosition}
-          selectedIndex={selectedIndex}
+          query={menu.query}
+          position={menu.position}
+          selectedIndex={menu.selectedIndex}
           onSelect={handleSelectFile}
           onClose={handleCloseAutocomplete}
           onFilesChange={handleFilesChange}
+          onSelectionChange={(file) => { selectedFileRef.current = file }}
         />
       )}
 
       {/* / Slash commands */}
-      {showSlashMenu && (
+      {menu.type === '/' && (
         <SlashCommandMenu
-          query={slashQuery}
-          position={slashPosition}
-          selectedIndex={slashSelectedIndex}
+          query={menu.query}
+          position={menu.position}
+          selectedIndex={menu.selectedIndex}
           onSelect={handleSelectSlashCommand}
-          onClose={handleCloseSlashMenu}
+          onClose={closeMenu}
           onCommandsChange={handleSlashCommandsChange}
+          onSelectionChange={(cmd) => { selectedSlashCommandRef.current = cmd }}
         />
       )}
 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, memo } from 'react'
 import {
   Message,
   MessageContent,
@@ -86,6 +86,161 @@ function TypingIndicator() {
   )
 }
 
+// Props for memoized message item
+interface MessageItemProps {
+  message: ParsedMessage
+  isLast: boolean
+  isWorking: boolean
+  workingDirectory: string
+  searchQuery: string
+  isCurrentMatchMessage: boolean
+  currentMatchIndexInMessage: number | undefined
+  isSearchActive: boolean
+  compactionsBeforeThis: CompactionEvent[]
+  allTools: ToolCall[]
+  hasRunningTask: boolean
+}
+
+// Memoized message item - prevents cascade re-renders when siblings change
+const MessageItem = memo(function MessageItem({
+  message,
+  isLast,
+  isWorking,
+  workingDirectory,
+  searchQuery,
+  isCurrentMatchMessage,
+  currentMatchIndexInMessage,
+  isSearchActive,
+  compactionsBeforeThis,
+  allTools,
+  hasRunningTask,
+}: MessageItemProps) {
+  // Handle system messages as dividers
+  if (message.role === 'system') {
+    return <SystemDivider text={message.text} />
+  }
+
+  const hasText = !!message.text?.trim()
+  const hasFileBlocks = (message.fileBlocks?.length ?? 0) > 0
+  const topLevelTools = (message.toolCalls || []).filter((tool) => {
+    if (tool.parentToolId) return false
+    if (hasRunningTask && tool.name !== 'Task') return false
+    return true
+  })
+  const hasTools = topLevelTools.length > 0
+  const isMessageStreaming = message.isStreaming && isLast && isWorking
+
+  // For user messages, extract @file refs
+  const { cleanText, filePaths } = message.role === 'user'
+    ? extractFileRefs(message.text)
+    : { cleanText: message.text, filePaths: [] }
+
+  const hasCleanText = !!cleanText?.trim()
+  const hasFileRefs = filePaths.length > 0
+
+  return (
+    <div data-message-id={message.id}>
+      {/* Compaction dividers - rendered before message */}
+      {compactionsBeforeThis.map((c) => (
+        <CompactionDivider key={c.timestamp} summary={c.summary} />
+      ))}
+
+      {/* File blocks for user messages - shown before text */}
+      {hasFileBlocks && message.role === 'user' && (
+        <div className="space-y-2 mb-2 max-w-[80%] ml-auto">
+          {message.fileBlocks!.map(file => (
+            <FileBlockDisplay key={file.id} file={file} />
+          ))}
+        </div>
+      )}
+
+      {/* @file references for user messages - shown before text */}
+      {hasFileRefs && message.role === 'user' && (
+        <div className="space-y-2 mb-2 max-w-[80%] ml-auto">
+          {filePaths.map((path, i) => (
+            <FileRefDisplay
+              key={`${message.id}-ref-${i}`}
+              path={path}
+              workingDirectory={workingDirectory}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Message bubble - only show if there's text content */}
+      {(hasCleanText || (hasText && message.role !== 'user')) && (
+        <Message from={message.role}>
+          <MessageContent>
+            {message.role === 'user' ? (
+              // User messages: plain text with search highlighting
+              <div className="whitespace-pre-wrap">
+                {highlightSearchMatches(
+                  cleanText,
+                  searchQuery,
+                  isCurrentMatchMessage,
+                  isSearchActive,
+                  currentMatchIndexInMessage
+                )}
+              </div>
+            ) : (
+              // Assistant messages: markdown with DOM-based highlighting
+              <HighlightableContent
+                content={message.text}
+                searchQuery={searchQuery}
+                isMessageWithCurrentMatch={isCurrentMatchMessage}
+                isSearchActive={isSearchActive}
+                currentMatchIndexInMessage={currentMatchIndexInMessage}
+              />
+            )}
+            {isMessageStreaming && (
+              <Shimmer className="mt-1">...</Shimmer>
+            )}
+          </MessageContent>
+          {/* Copy action - show on hover */}
+          {!isMessageStreaming && (
+            <MessageActions
+              className={`opacity-0 group-hover:opacity-100 transition-opacity mt-1 ${
+                message.role === 'user' ? 'ml-auto' : ''
+              }`}
+            >
+              <CopyButton content={message.text} />
+            </MessageActions>
+          )}
+        </Message>
+      )}
+
+      {/* Tool uses - rendered outside the message bubble */}
+      {/* Only show top-level tools (those without parentToolId) */}
+      {hasTools && (
+        <div className="space-y-2 mt-2">
+          {topLevelTools.map((tool) => (
+            <ToolDisplay
+              key={tool.id}
+              tool={tool}
+              isStreaming={isWorking}
+              allTools={allTools}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}, (prev, next) => {
+  // Custom comparator - return true if props are equal (skip re-render)
+  return (
+    prev.message === next.message &&
+    prev.isLast === next.isLast &&
+    prev.isWorking === next.isWorking &&
+    prev.searchQuery === next.searchQuery &&
+    prev.isCurrentMatchMessage === next.isCurrentMatchMessage &&
+    prev.currentMatchIndexInMessage === next.currentMatchIndexInMessage &&
+    prev.isSearchActive === next.isSearchActive &&
+    prev.compactionsBeforeThis === next.compactionsBeforeThis &&
+    prev.hasRunningTask === next.hasRunningTask &&
+    prev.allTools === next.allTools
+  )
+})
+
 export function MessageList({
   messages,
   isWorking,
@@ -133,145 +288,61 @@ export function MessageList({
     [messages, hasRunningTask]
   )
 
-  // Track which compaction events we've already rendered
-  const renderedCompactions = new Set<string>()
+  // Pre-compute compaction events for each message - enables memoization
+  // Each message gets stable array reference if compactions haven't changed
+  const compactionsByMessageId = useMemo(() => {
+    const result: Record<string, CompactionEvent[]> = {}
+    const renderedCompactions = new Set<string>()
+
+    visibleMessages.forEach((message, index) => {
+      const prevMessage = index > 0 ? visibleMessages[index - 1] : null
+      const prevTimestamp = prevMessage?.timestamp ? new Date(prevMessage.timestamp).getTime() : 0
+      const currTimestamp = message.timestamp ? new Date(message.timestamp).getTime() : Infinity
+
+      const compactionsBeforeThis = compactionEvents.filter((c) => {
+        if (renderedCompactions.has(c.timestamp)) return false
+        const compactTime = new Date(c.timestamp).getTime()
+        return compactTime > prevTimestamp && compactTime <= currTimestamp
+      })
+
+      compactionsBeforeThis.forEach((c) => renderedCompactions.add(c.timestamp))
+      result[message.id] = compactionsBeforeThis
+    })
+
+    return result
+  }, [visibleMessages, compactionEvents])
+
+  // Track which compactions were rendered (for trailing dividers)
+  const renderedCompactionTimestamps = useMemo(() => {
+    const timestamps = new Set<string>()
+    Object.values(compactionsByMessageId).forEach((compactions) => {
+      compactions.forEach((c) => timestamps.add(c.timestamp))
+    })
+    return timestamps
+  }, [compactionsByMessageId])
 
   return (
     <>
-      {visibleMessages.map((message, index) => {
-        // Check against original array's last message for streaming indicator
-        const isLastMessage = message.id === lastMessageId
-
-        // Handle system messages as dividers
-        if (message.role === 'system') {
-          return <SystemDivider key={message.id} text={message.text} />
-        }
-
-        // Find compaction events that should appear before this message
-        const prevMessage = index > 0 ? visibleMessages[index - 1] : null
-        const prevTimestamp = prevMessage?.timestamp ? new Date(prevMessage.timestamp).getTime() : 0
-        const currTimestamp = message.timestamp ? new Date(message.timestamp).getTime() : Infinity
-
-        const compactionsBeforeThis = compactionEvents.filter((c) => {
-          if (renderedCompactions.has(c.timestamp)) return false
-          const compactTime = new Date(c.timestamp).getTime()
-          return compactTime > prevTimestamp && compactTime <= currTimestamp
-        })
-
-        const hasText = !!message.text?.trim()
-        const hasFileBlocks = (message.fileBlocks?.length ?? 0) > 0
-        const topLevelTools = (message.toolCalls || []).filter((tool) => {
-          if (tool.parentToolId) return false
-          if (hasRunningTask && tool.name !== 'Task') return false
-          return true
-        })
-        const hasTools = topLevelTools.length > 0
-        const isMessageStreaming = message.isStreaming && isLastMessage && isWorking
-        const isMessageWithCurrentMatch = currentMatchMessageId === message.id
-
-        // For user messages, extract @file refs
-        const { cleanText, filePaths } = message.role === 'user'
-          ? extractFileRefs(message.text)
-          : { cleanText: message.text, filePaths: [] }
-
-        const hasCleanText = !!cleanText?.trim()
-        const hasFileRefs = filePaths.length > 0
-
-        // Mark compactions as rendered
-        compactionsBeforeThis.forEach((c) => renderedCompactions.add(c.timestamp))
-
-        return (
-          <div key={message.id} data-message-id={message.id}>
-            {/* Compaction dividers - rendered before message */}
-            {compactionsBeforeThis.map((c) => (
-              <CompactionDivider key={c.timestamp} summary={c.summary} />
-            ))}
-
-            {/* File blocks for user messages - shown before text */}
-            {hasFileBlocks && message.role === 'user' && (
-              <div className="space-y-2 mb-2 max-w-[80%] ml-auto">
-                {message.fileBlocks!.map(file => (
-                  <FileBlockDisplay key={file.id} file={file} />
-                ))}
-              </div>
-            )}
-
-            {/* @file references for user messages - shown before text */}
-            {hasFileRefs && message.role === 'user' && (
-              <div className="space-y-2 mb-2 max-w-[80%] ml-auto">
-                {filePaths.map((path, i) => (
-                  <FileRefDisplay
-                    key={`${message.id}-ref-${i}`}
-                    path={path}
-                    workingDirectory={workingDirectory}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Message bubble - only show if there's text content */}
-            {(hasCleanText || (hasText && message.role !== 'user')) && (
-              <Message from={message.role}>
-                <MessageContent>
-                  {message.role === 'user' ? (
-                    // User messages: plain text with search highlighting
-                    <div className="whitespace-pre-wrap">
-                      {highlightSearchMatches(
-                        cleanText,
-                        searchQuery,
-                        isMessageWithCurrentMatch,
-                        isSearchActive,
-                        currentMatchIndexInMessage
-                      )}
-                    </div>
-                  ) : (
-                    // Assistant messages: markdown with DOM-based highlighting
-                    <HighlightableContent
-                      content={message.text}
-                      searchQuery={searchQuery}
-                      isMessageWithCurrentMatch={isMessageWithCurrentMatch}
-                      isSearchActive={isSearchActive}
-                      currentMatchIndexInMessage={currentMatchIndexInMessage}
-                    />
-                  )}
-                  {isMessageStreaming && (
-                    <Shimmer className="mt-1">...</Shimmer>
-                  )}
-                </MessageContent>
-                {/* Copy action - show on hover */}
-                {!isMessageStreaming && (
-                  <MessageActions
-                    className={`opacity-0 group-hover:opacity-100 transition-opacity mt-1 ${
-                      message.role === 'user' ? 'ml-auto' : ''
-                    }`}
-                  >
-                    <CopyButton content={message.text} />
-                  </MessageActions>
-                )}
-              </Message>
-            )}
-
-            {/* Tool uses - rendered outside the message bubble */}
-            {/* Only show top-level tools (those without parentToolId) */}
-            {hasTools && (
-              <div className="space-y-2 mt-2">
-                {topLevelTools.map((tool) => (
-                  <ToolDisplay
-                    key={tool.id}
-                    tool={tool}
-                    isStreaming={isWorking}
-                    allTools={allTools}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )
-      })}
+      {visibleMessages.map((message) => (
+        <MessageItem
+          key={message.id}
+          message={message}
+          isLast={message.id === lastMessageId}
+          isWorking={isWorking}
+          workingDirectory={workingDirectory || ''}
+          searchQuery={searchQuery}
+          isCurrentMatchMessage={currentMatchMessageId === message.id}
+          currentMatchIndexInMessage={currentMatchMessageId === message.id ? currentMatchIndexInMessage : undefined}
+          isSearchActive={isSearchActive}
+          compactionsBeforeThis={compactionsByMessageId[message.id] || []}
+          allTools={allTools}
+          hasRunningTask={hasRunningTask}
+        />
+      ))}
 
       {/* Trailing compaction dividers (happened after last message) */}
       {compactionEvents
-        .filter((c) => !renderedCompactions.has(c.timestamp))
+        .filter((c) => !renderedCompactionTimestamps.has(c.timestamp))
         .map((c) => (
           <CompactionDivider key={c.timestamp} summary={c.summary} />
         ))}

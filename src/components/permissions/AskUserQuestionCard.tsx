@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useReducer } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -11,16 +11,54 @@ interface AskUserQuestionCardProps {
   question: PendingQuestion
 }
 
+interface FormState {
+  answers: Record<number, string | string[]>
+  otherInputs: Record<number, string>
+  isSubmitting: boolean
+  activeQuestionIndex: number
+}
+
+type FormAction =
+  | { type: 'SET_ANSWER'; questionIndex: number; value: string | string[] }
+  | { type: 'SET_OTHER_INPUT'; questionIndex: number; value: string }
+  | { type: 'SET_SUBMITTING'; value: boolean }
+  | { type: 'SET_ACTIVE_QUESTION'; index: number }
+  | { type: 'RESET' }
+
+const initialFormState: FormState = {
+  answers: {},
+  otherInputs: {},
+  isSubmitting: false,
+  activeQuestionIndex: 0,
+}
+
+function formReducer(state: FormState, action: FormAction): FormState {
+  switch (action.type) {
+    case 'SET_ANSWER':
+      return { ...state, answers: { ...state.answers, [action.questionIndex]: action.value } }
+    case 'SET_OTHER_INPUT':
+      return { ...state, otherInputs: { ...state.otherInputs, [action.questionIndex]: action.value } }
+    case 'SET_SUBMITTING':
+      return { ...state, isSubmitting: action.value }
+    case 'SET_ACTIVE_QUESTION':
+      return { ...state, activeQuestionIndex: action.index }
+    case 'RESET':
+      return initialFormState
+    default:
+      return state
+  }
+}
+
 export function AskUserQuestionCard({ question }: AskUserQuestionCardProps) {
   const removePendingQuestion = useStore((s) => s.removePendingQuestion)
 
-  // Track selected answers for each question
+  // Form state via reducer
   // For single select: { questionIndex: optionLabel }
   // For multi select: { questionIndex: [optionLabel1, optionLabel2] }
-  const [answers, setAnswers] = useState<Record<number, string | string[]>>({})
-  const [otherInputs, setOtherInputs] = useState<Record<number, string>>({})
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [activeQuestionIndex, setActiveQuestionIndex] = useState(0)
+  const [formState, dispatch] = useReducer(formReducer, initialFormState)
+  const { answers, otherInputs, isSubmitting, activeQuestionIndex } = formState
+
+  // Timer kept separate (high-frequency updates)
   const [secondsLeft, setSecondsLeft] = useState(170)
 
   // Countdown timer
@@ -64,45 +102,44 @@ export function AskUserQuestionCard({ question }: AskUserQuestionCardProps) {
     return !!answer
   }
 
-  const handleOptionSelect = (questionIndex: number, optionLabel: string, multiSelect: boolean) => {
-    setAnswers((prev) => {
-      if (multiSelect) {
-        const current = (prev[questionIndex] as string[]) || []
-        if (current.includes(optionLabel)) {
-          return { ...prev, [questionIndex]: current.filter((l) => l !== optionLabel) }
-        } else {
-          return { ...prev, [questionIndex]: [...current, optionLabel] }
-        }
+  const handleOptionSelect = useCallback((questionIndex: number, optionLabel: string, multiSelect: boolean) => {
+    // Compute the new answer value
+    let newValue: string | string[]
+    if (multiSelect) {
+      const current = (answers[questionIndex] as string[]) || []
+      if (current.includes(optionLabel)) {
+        newValue = current.filter((l) => l !== optionLabel)
       } else {
-        return { ...prev, [questionIndex]: optionLabel }
+        newValue = [...current, optionLabel]
       }
-    })
+    } else {
+      newValue = optionLabel
+    }
+    dispatch({ type: 'SET_ANSWER', questionIndex, value: newValue })
+
     // Clear "Other" input if selecting a predefined option
     if (optionLabel !== 'Other') {
-      setOtherInputs((prev) => ({ ...prev, [questionIndex]: '' }))
+      dispatch({ type: 'SET_OTHER_INPUT', questionIndex, value: '' })
     }
-  }
+  }, [answers])
 
-  const handleOtherInput = (questionIndex: number, value: string) => {
-    setOtherInputs((prev) => ({ ...prev, [questionIndex]: value }))
+  const handleOtherInput = useCallback((questionIndex: number, value: string) => {
+    dispatch({ type: 'SET_OTHER_INPUT', questionIndex, value })
     // Set "Other" as selected when typing
-    setAnswers((prev) => {
-      const q = question.questions[questionIndex]
-      if (q.multiSelect) {
-        const current = (prev[questionIndex] as string[]) || []
-        if (!current.includes('Other')) {
-          return { ...prev, [questionIndex]: [...current, 'Other'] }
-        }
-        return prev
-      } else {
-        return { ...prev, [questionIndex]: 'Other' }
+    const q = question.questions[questionIndex]
+    if (q.multiSelect) {
+      const current = (answers[questionIndex] as string[]) || []
+      if (!current.includes('Other')) {
+        dispatch({ type: 'SET_ANSWER', questionIndex, value: [...current, 'Other'] })
       }
-    })
-  }
+    } else {
+      dispatch({ type: 'SET_ANSWER', questionIndex, value: 'Other' })
+    }
+  }, [question.questions, answers])
 
   const handleSubmit = useCallback(async () => {
     if (isSubmitting) return
-    setIsSubmitting(true)
+    dispatch({ type: 'SET_SUBMITTING', value: true })
 
     try {
       // Format answers for Claude - keyed by header
@@ -133,7 +170,7 @@ export function AskUserQuestionCard({ question }: AskUserQuestionCardProps) {
       removePendingQuestion(question.requestId)
     } catch (error) {
       console.error('Failed to submit answer:', error)
-      setIsSubmitting(false)
+      dispatch({ type: 'SET_SUBMITTING', value: false })
     }
   }, [question, answers, otherInputs, isSubmitting, removePendingQuestion])
 
@@ -148,6 +185,24 @@ export function AskUserQuestionCard({ question }: AskUserQuestionCardProps) {
     if (firstIncomplete >= 0) return firstIncomplete
     return Math.min(activeQuestionIndex, question.questions.length - 1)
   }
+
+  // Extracted click handlers using data attributes
+  const handleQuestionContainerClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const index = Number(e.currentTarget.dataset.questionIndex)
+    dispatch({ type: 'SET_ACTIVE_QUESTION', index })
+  }, [])
+
+  const handleOptionClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    const questionIndex = Number(e.currentTarget.dataset.questionIndex)
+    const optionLabel = e.currentTarget.dataset.optionLabel!
+    const multiSelect = e.currentTarget.dataset.multiSelect === 'true'
+    handleOptionSelect(questionIndex, optionLabel, multiSelect)
+  }, [handleOptionSelect])
+
+  const handleOtherInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const questionIndex = Number(e.currentTarget.dataset.questionIndex)
+    handleOtherInput(questionIndex, e.target.value)
+  }, [handleOtherInput])
 
   // Keyboard navigation
   useEffect(() => {
@@ -185,7 +240,7 @@ export function AskUserQuestionCard({ question }: AskUserQuestionCardProps) {
         : q.options[selectedIndex - 1].label
 
       handleOptionSelect(qIndex, label, q.multiSelect)
-      setActiveQuestionIndex(qIndex)
+      dispatch({ type: 'SET_ACTIVE_QUESTION', index: qIndex })
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -216,11 +271,12 @@ export function AskUserQuestionCard({ question }: AskUserQuestionCardProps) {
           {question.questions.map((q: Question, qIndex: number) => (
             <div
               key={qIndex}
+              data-question-index={qIndex}
               className={cn(
                 "space-y-2 rounded-md p-2 transition-colors",
                 qIndex === activeQuestionIndex ? "bg-muted/30" : "bg-transparent"
               )}
-              onClick={() => setActiveQuestionIndex(qIndex)}
+              onClick={handleQuestionContainerClick}
             >
               {/* Question header badge */}
               <div className="flex items-center gap-2">
@@ -244,7 +300,10 @@ export function AskUserQuestionCard({ question }: AskUserQuestionCardProps) {
                     <button
                       key={oIndex}
                       type="button"
-                      onClick={() => handleOptionSelect(qIndex, option.label, q.multiSelect)}
+                      data-question-index={qIndex}
+                      data-option-label={option.label}
+                      data-multi-select={q.multiSelect}
+                      onClick={handleOptionClick}
                       className={cn(
                         'group relative px-3 py-1.5 rounded-md text-sm transition-all',
                         'border hover:border-primary/50',
@@ -272,7 +331,10 @@ export function AskUserQuestionCard({ question }: AskUserQuestionCardProps) {
                   return (
                     <button
                       type="button"
-                      onClick={() => handleOptionSelect(qIndex, 'Other', q.multiSelect)}
+                      data-question-index={qIndex}
+                      data-option-label="Other"
+                      data-multi-select={q.multiSelect}
+                      onClick={handleOptionClick}
                       className={cn(
                         'px-3 py-1.5 rounded-md text-sm transition-all',
                         'border hover:border-primary/50',
@@ -297,7 +359,8 @@ export function AskUserQuestionCard({ question }: AskUserQuestionCardProps) {
                 <Input
                   placeholder="Enter your answer..."
                   value={otherInputs[qIndex] || ''}
-                  onChange={(e) => handleOtherInput(qIndex, e.target.value)}
+                  data-question-index={qIndex}
+                  onChange={handleOtherInputChange}
                   className="h-8 text-sm"
                   autoFocus
                 />

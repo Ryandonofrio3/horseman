@@ -339,8 +339,7 @@ export function Sidebar({
   onSetSortOrder,
 }: SidebarProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
-  const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
-  const [editingName, setEditingName] = useState('')
+  const [editing, setEditing] = useState<{ sessionId: string; name: string } | null>(null)
   const [showHiddenFolders, setShowHiddenFolders] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const prevSessionIdsRef = useRef<Set<string>>(new Set())
@@ -367,22 +366,28 @@ export function Sidebar({
 
   // Editing handlers
   const handleStartEdit = useCallback((id: string, currentName: string) => {
-    setEditingSessionId(id)
-    setEditingName(currentName)
+    setEditing({ sessionId: id, name: currentName })
   }, [])
 
   const handleEditingSave = useCallback(() => {
-    if (editingSessionId && editingName.trim()) {
-      onRenameSession?.(editingSessionId, editingName.trim())
+    if (editing && editing.name.trim()) {
+      onRenameSession?.(editing.sessionId, editing.name.trim())
     }
-    setEditingSessionId(null)
-    setEditingName('')
-  }, [editingSessionId, editingName, onRenameSession])
+    setEditing(null)
+  }, [editing, onRenameSession])
 
   const handleEditingCancel = useCallback(() => {
-    setEditingSessionId(null)
-    setEditingName('')
+    setEditing(null)
   }, [])
+
+  const handleEditingNameChange = useCallback((name: string) => {
+    setEditing(prev => prev ? { ...prev, name } : null)
+  }, [])
+
+  // Sort menu callbacks
+  const handleSortRecent = useCallback(() => onSetSortOrder('recent'), [onSetSortOrder])
+  const handleSortName = useCallback(() => onSetSortOrder('name'), [onSetSortOrder])
+  const handleSortStatus = useCallback(() => onSetSortOrder('status'), [onSetSortOrder])
 
   // Auto-expand group containing active session (only when activeSessionId changes)
   useEffect(() => {
@@ -452,13 +457,13 @@ export function Sidebar({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            <DropdownMenuItem onClick={() => onSetSortOrder('recent')}>
+            <DropdownMenuItem onClick={handleSortRecent}>
               Recent {sortOrder === 'recent' && '✓'}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onSetSortOrder('name')}>
+            <DropdownMenuItem onClick={handleSortName}>
               Name {sortOrder === 'name' && '✓'}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onSetSortOrder('status')}>
+            <DropdownMenuItem onClick={handleSortStatus}>
               Status {sortOrder === 'status' && '✓'}
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -525,12 +530,12 @@ export function Sidebar({
                           key={session.id}
                           session={session}
                           isActive={session.id === activeSessionId}
-                          isEditing={session.id === editingSessionId}
-                          editingName={session.id === editingSessionId ? editingName : ''}
+                          isEditing={session.id === editing?.sessionId}
+                          editingName={session.id === editing?.sessionId ? editing.name : ''}
                           onSelect={onSelectSession}
                           onSelectDiscovered={onSelectDiscoveredSession}
                           onStartEdit={handleStartEdit}
-                          onEditingNameChange={setEditingName}
+                          onEditingNameChange={handleEditingNameChange}
                           onEditingSave={handleEditingSave}
                           onEditingCancel={handleEditingCancel}
                           onDelete={onDeleteSession}
