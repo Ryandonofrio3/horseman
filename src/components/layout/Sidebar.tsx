@@ -230,6 +230,7 @@ function groupByProject(
     if (hiddenSessionIds.includes(ds.id)) continue
     // Skip sessions with local command caveats (these are /clear, etc.)
     if (ds.first_message?.includes('<local-command-caveat>')) continue
+    if (ds.first_message?.includes('<command-message>')) continue
     // Check both id and claudeSessionId since Horseman uses nanoid but Claude uses UUID
     const existsInLocal = sessions.find((s) => s.id === ds.id || s.claudeSessionId === ds.id)
     if (existsInLocal) continue

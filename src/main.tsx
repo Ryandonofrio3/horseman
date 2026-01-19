@@ -2,10 +2,10 @@ import { scan } from "react-scan";
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 
-// // Enable React Scan in development
-// if (import.meta.env.DEV) {
-//   scan({ enabled: true });
-// }
+// Enable React Scan in development
+if (import.meta.env.DEV) {
+  scan({ enabled: true });
+}
 import App from "./App";
 import { useStore } from "./store";
 import { DiffsProvider } from "./providers/DiffsProvider";

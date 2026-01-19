@@ -198,9 +198,11 @@ function SubagentDisplayInner({ tool, childTools = [], allTools = [] }: Subagent
 
 export const SubagentDisplay = memo(SubagentDisplayInner, (prev, next) => {
   if (prev.tool !== next.tool) return false
-  if (prev.childTools.length !== next.childTools.length) return false
-  for (let i = 0; i < prev.childTools.length; i++) {
-    if (prev.childTools[i] !== next.childTools[i]) return false
+  const prevChildren = prev.childTools ?? []
+  const nextChildren = next.childTools ?? []
+  if (prevChildren.length !== nextChildren.length) return false
+  for (let i = 0; i < prevChildren.length; i++) {
+    if (prevChildren[i] !== nextChildren[i]) return false
   }
   return true
 })

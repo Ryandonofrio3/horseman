@@ -14,25 +14,6 @@ import type { FileBlock, Message, Session } from '@/domain'
 import { AppLayout, Sidebar, TabBar } from '@/components/layout'
 import { ChatView } from '@/components/chat'
 import { MessageSquare } from 'lucide-react'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-  AlertDialogAction,
-} from '@/components/ui/alert-dialog'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 
 // Empty state when no session is selected
 function EmptyState({ onNewSession }: { onNewSession: () => void }) {

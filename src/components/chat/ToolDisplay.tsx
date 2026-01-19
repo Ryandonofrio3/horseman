@@ -204,8 +204,10 @@ export const ToolDisplay = memo(ToolDisplayInner, (prev, next) => {
 
   // For Task tools, check if child tools changed
   if (prev.tool.name === 'Task') {
-    const prevChildCount = prev.allTools.filter(t => t.parentToolId === prev.tool.id).length
-    const nextChildCount = next.allTools.filter(t => t.parentToolId === next.tool.id).length
+    const prevTools = prev.allTools ?? []
+    const nextTools = next.allTools ?? []
+    const prevChildCount = prevTools.filter(t => t.parentToolId === prev.tool.id).length
+    const nextChildCount = nextTools.filter(t => t.parentToolId === next.tool.id).length
     if (prevChildCount !== nextChildCount) return false
   }
   return true
