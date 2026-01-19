@@ -29,19 +29,21 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          workspaces: |
+            . -> target
+            ./src-tauri -> target
 
       - name: Install frontend dependencies
         run: bun install
 
       - name: Build horseman-mcp (both architectures)
         run: |
-          # Build for both architectures
-          cargo build --release -p horseman-mcp --target aarch64-apple-darwin
-          cargo build --release -p horseman-mcp --target x86_64-apple-darwin
+          # Build both architectures in parallel
+          cargo build --release -p horseman-mcp --target aarch64-apple-darwin &
+          cargo build --release -p horseman-mcp --target x86_64-apple-darwin &
+          wait
 
           # Copy to binaries dir with Tauri's expected naming
-          # (Tauri appends -{target} to externalBin paths)
           mkdir -p src-tauri/binaries
           cp target/aarch64-apple-darwin/release/horseman-mcp \
             src-tauri/binaries/horseman-mcp-aarch64-apple-darwin
