@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { useStore } from '@/store'
 import type { ModelAlias } from '@/store/types'
 
@@ -13,7 +14,7 @@ const MODEL_COLORS: Record<ModelAlias, string> = {
   haiku: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
 }
 
-export function ModelBadge() {
+export const ModelBadge = memo(function ModelBadge() {
   const model = useStore((s) => s.model)
   const cycleModel = useStore((s) => s.cycleModel)
 
@@ -27,4 +28,4 @@ export function ModelBadge() {
       {MODEL_DISPLAY[model]}
     </button>
   )
-}
+})

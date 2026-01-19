@@ -8,6 +8,14 @@ import type { ToolCall } from '@/domain'
 import { CodeDisplay } from './CodeDisplay'
 import { DiffDisplay } from './DiffDisplay'
 import { SubagentDisplay } from './SubagentDisplay'
+import { PlanFileDisplay } from './PlanFileDisplay'
+
+// Check if this is a plan file write (to ~/.claude/plans/)
+function isPlanFileWrite(tool: ToolCall): boolean {
+  if (tool.name !== 'Write') return false
+  const filePath = tool.input.file_path as string | undefined
+  return Boolean(filePath && filePath.includes('/.claude/plans/'))
+}
 
 interface ToolDisplayProps {
   tool: ToolCall
@@ -80,8 +88,13 @@ function getToolPreview(tool: ToolCall): string | undefined {
 }
 
 function ToolDisplayInner({ tool, isStreaming = false, allTools = [] }: ToolDisplayProps) {
-  // Hide TodoWrite - we have a dedicated UI for it
-  if (tool.name === 'TodoWrite') return null
+  // Hide TodoWrite and EnterPlanMode - we have dedicated UI for them
+  if (tool.name === 'TodoWrite' || tool.name === 'EnterPlanMode') return null
+
+  // Plan file writes - render as special PlanFileDisplay (always visible, markdown rendered)
+  if (isPlanFileWrite(tool)) {
+    return <PlanFileDisplay tool={tool} isStreaming={isStreaming} />
+  }
 
   // Task tool - render as SubagentDisplay with child tools
   if (tool.name === 'Task') {

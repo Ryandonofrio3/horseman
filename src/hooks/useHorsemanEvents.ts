@@ -169,6 +169,13 @@ export function useHorsemanEvents({
           case 'permission.requested': {
             const state = useStore.getState()
             const mode = state.permissionMode
+
+            // ExitPlanMode - route to plan overlay, skip regular permissions
+            if (payload.toolName === 'ExitPlanMode') {
+              useStore.getState().setPlanPermissionId(payload.requestId)
+              break
+            }
+
             const isEditTool = ['Edit', 'Write'].includes(payload.toolName)
 
             // Bypass All mode - auto-approve everything

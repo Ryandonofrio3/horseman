@@ -5,7 +5,14 @@ export const createPlanSlice: StateCreator<AppStore, [], [], PlanSlice> = (set) 
   activePlan: null,
 
   enterPlanMode: (sessionId, toolId, content) =>
-    set({ activePlan: { sessionId, toolId, content } }),
+    set({ activePlan: { sessionId, toolId, content, permissionRequestId: null } }),
+
+  setPlanPermissionId: (requestId) =>
+    set((state) => ({
+      activePlan: state.activePlan
+        ? { ...state.activePlan, permissionRequestId: requestId }
+        : null,
+    })),
 
   resolvePlan: (action, _feedback) => {
     // State update only - IPC call is caller's responsibility

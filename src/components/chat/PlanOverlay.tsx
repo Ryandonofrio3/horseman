@@ -1,166 +1,228 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
-import { MessageResponse } from '@/components/ai-elements/message'
-import {
-  Plan,
-  PlanHeader,
-  PlanTitle,
-  PlanDescription,
-  PlanContent,
-  PlanFooter,
-  PlanTrigger,
-} from '@/components/ai-elements/plan'
 import { ipc } from '@/lib/ipc'
 import { useStore } from '@/store'
 import { useActivePlan } from '@/store/selectors'
-import { FileText, Check, X, Pencil } from 'lucide-react'
+import { FileCheck, Check, X } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 export function PlanOverlay() {
   const activePlan = useActivePlan()
   const resolvePlan = useStore((s) => s.resolvePlan)
   const [isProcessing, setIsProcessing] = useState(false)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [feedbackText, setFeedbackText] = useState('')
+  const feedbackRef = useRef<HTMLTextAreaElement>(null)
 
-  // Consolidate feedback state
-  const [feedbackState, setFeedbackState] = useState<{ isOpen: boolean; text: string }>({
-    isOpen: false,
-    text: '',
-  })
-
-  // Helper functions
-  const openFeedback = useCallback(() => {
-    setFeedbackState({ isOpen: true, text: '' })
-  }, [])
-
-  const closeFeedback = useCallback(() => {
-    setFeedbackState({ isOpen: false, text: '' })
-  }, [])
-
-  const updateFeedbackText = useCallback((text: string) => {
-    setFeedbackState((prev) => ({ ...prev, text }))
-  }, [])
+  const getRequestId = useCallback(() => {
+    // Use permissionRequestId if available, fall back to toolId
+    return activePlan?.permissionRequestId || activePlan?.toolId
+  }, [activePlan])
 
   const handleAccept = useCallback(async () => {
-    if (!activePlan || isProcessing) return
+    const requestId = getRequestId()
+    if (!requestId || isProcessing) return
     setIsProcessing(true)
     try {
-      await ipc.permissions.respond(activePlan.toolId, true, {})
+      await ipc.permissions.respond(requestId, true, {})
       resolvePlan('accept')
     } catch (err) {
       console.error('Failed to accept plan:', err)
     } finally {
       setIsProcessing(false)
     }
-  }, [activePlan, isProcessing, resolvePlan])
+  }, [getRequestId, isProcessing, resolvePlan])
 
   const handleAcceptAutoEdits = useCallback(async () => {
-    if (!activePlan || isProcessing) return
+    const requestId = getRequestId()
+    if (!requestId || isProcessing) return
     setIsProcessing(true)
     try {
-      await ipc.permissions.respond(activePlan.toolId, true, {})
+      await ipc.permissions.respond(requestId, true, {})
       resolvePlan('acceptAutoEdits')
     } catch (err) {
       console.error('Failed to accept plan with auto-edits:', err)
     } finally {
       setIsProcessing(false)
     }
-  }, [activePlan, isProcessing, resolvePlan])
+  }, [getRequestId, isProcessing, resolvePlan])
 
   const handleReject = useCallback(async () => {
-    if (!activePlan || isProcessing) return
+    const requestId = getRequestId()
+    if (!requestId || isProcessing) return
     setIsProcessing(true)
     try {
-      await ipc.permissions.respond(activePlan.toolId, false, {
-        message: feedbackState.text || 'Plan rejected by user',
+      await ipc.permissions.respond(requestId, false, {
+        message: feedbackText || 'Plan rejected by user',
       })
-      resolvePlan('reject', feedbackState.text)
+      resolvePlan('reject', feedbackText)
     } catch (err) {
       console.error('Failed to reject plan:', err)
     } finally {
       setIsProcessing(false)
-      closeFeedback()
+      setFeedbackOpen(false)
+      setFeedbackText('')
     }
-  }, [activePlan, isProcessing, feedbackState.text, resolvePlan, closeFeedback])
+  }, [getRequestId, isProcessing, feedbackText, resolvePlan])
+
+  const openFeedback = useCallback(() => {
+    setFeedbackOpen(true)
+    setFeedbackText('')
+  }, [])
+
+  const closeFeedback = useCallback(() => {
+    setFeedbackOpen(false)
+    setFeedbackText('')
+  }, [])
+
+  // Keyboard navigation
+  useEffect(() => {
+    if (!activePlan) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if typing in an input
+      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) {
+        // Handle feedback-specific keys
+        if (feedbackOpen) {
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            closeFeedback()
+          } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            e.preventDefault()
+            handleReject()
+          }
+        }
+        return
+      }
+
+      if (feedbackOpen) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          closeFeedback()
+        }
+        return
+      }
+
+      // Main keyboard shortcuts
+      switch (e.key) {
+        case '1':
+        case 'Enter':
+          e.preventDefault()
+          handleAcceptAutoEdits()
+          break
+        case '2':
+          e.preventDefault()
+          handleAccept()
+          break
+        case '3':
+        case 'Escape':
+          e.preventDefault()
+          openFeedback()
+          break
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [activePlan, feedbackOpen, handleAccept, handleAcceptAutoEdits, handleReject, openFeedback, closeFeedback])
+
+  // Focus feedback textarea when opened
+  useEffect(() => {
+    if (feedbackOpen && feedbackRef.current) {
+      feedbackRef.current.focus()
+    }
+  }, [feedbackOpen])
 
   if (!activePlan) return null
 
   return (
-    <div className="px-4 pb-4">
-      <Plan defaultOpen className="border-blue-500/30 bg-blue-500/5">
-        <PlanHeader>
-          <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-blue-500" />
-            <PlanTitle>Plan Review</PlanTitle>
+    <div className="group flex w-full max-w-[95%] flex-col gap-2">
+      <div className="flex w-fit max-w-full min-w-0 flex-col gap-3 text-sm">
+        {/* Header */}
+        <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+          <FileCheck className="h-4 w-4 shrink-0" />
+          <span className="font-medium">Plan ready for approval</span>
+        </div>
+
+        {feedbackOpen ? (
+          /* Feedback mode */
+          <div className="flex flex-col gap-2 w-full">
+            <textarea
+              ref={feedbackRef}
+              value={feedbackText}
+              onChange={(e) => setFeedbackText(e.target.value)}
+              placeholder="What should Claude do differently?"
+              className="w-full p-3 rounded-md border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              rows={2}
+            />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={closeFeedback}
+                disabled={isProcessing}
+                className="h-7 px-3 text-xs"
+              >
+                Cancel
+                <kbd className="ml-1.5 text-[10px] text-muted-foreground">Esc</kbd>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleReject}
+                disabled={isProcessing}
+                className="h-7 px-3 text-xs font-medium text-red-500 hover:text-red-600 hover:bg-red-500/10"
+              >
+                <X className="h-3.5 w-3.5 mr-1.5" />
+                Reject
+                <kbd className="ml-1.5 text-[10px] text-muted-foreground">⌘↵</kbd>
+              </Button>
+            </div>
           </div>
-          <PlanDescription>Claude has proposed a plan and is waiting for your approval.</PlanDescription>
-          <PlanTrigger />
-        </PlanHeader>
-        <PlanContent className="max-h-[40vh] overflow-y-auto">
-          <MessageResponse>{activePlan.content}</MessageResponse>
-        </PlanContent>
-        <PlanFooter className="flex flex-col gap-3 pt-3 border-t">
-          {feedbackState.isOpen ? (
-            <div className="flex flex-col gap-2 w-full">
-              <textarea
-                value={feedbackState.text}
-                onChange={(e) => updateFeedbackText(e.target.value)}
-                placeholder="What should Claude do differently?"
-                className="w-full p-3 rounded-md border bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                rows={3}
-                autoFocus
-              />
-              <div className="flex gap-2 justify-end">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={closeFeedback}
-                  disabled={isProcessing}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleReject}
-                  disabled={isProcessing}
-                >
-                  <X className="h-4 w-4" />
-                  Reject with Feedback
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex gap-2 flex-wrap">
-              <Button
-                size="sm"
-                onClick={handleAcceptAutoEdits}
-                disabled={isProcessing}
-                className="bg-green-600 hover:bg-green-700 text-white"
-              >
-                <Check className="h-4 w-4" />
-                Accept + Auto Edits
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleAccept}
-                disabled={isProcessing}
-              >
-                <Check className="h-4 w-4" />
-                Accept
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={openFeedback}
-                disabled={isProcessing}
-              >
-                <Pencil className="h-4 w-4" />
-                Reject + Feedback
-              </Button>
-            </div>
-          )}
-        </PlanFooter>
-      </Plan>
+        ) : (
+          /* Action buttons */
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleAcceptAutoEdits}
+              disabled={isProcessing}
+              className={cn(
+                "h-7 px-3 text-xs font-medium",
+                "text-green-600 hover:text-green-700 hover:bg-green-500/10"
+              )}
+            >
+              <Check className="h-3.5 w-3.5 mr-1.5" />
+              Accept + Auto
+              <kbd className="ml-1.5 text-[10px] text-muted-foreground">1</kbd>
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleAccept}
+              disabled={isProcessing}
+              className="h-7 px-3 text-xs font-medium text-green-600 hover:text-green-700 hover:bg-green-500/10"
+            >
+              <Check className="h-3.5 w-3.5 mr-1.5" />
+              Accept
+              <kbd className="ml-1.5 text-[10px] text-muted-foreground">2</kbd>
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={openFeedback}
+              disabled={isProcessing}
+              className="h-7 px-3 text-xs font-medium text-red-500 hover:text-red-600 hover:bg-red-500/10"
+            >
+              <X className="h-3.5 w-3.5 mr-1.5" />
+              Reject
+              <kbd className="ml-1.5 text-[10px] text-muted-foreground">3</kbd>
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

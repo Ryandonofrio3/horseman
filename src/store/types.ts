@@ -111,11 +111,13 @@ export interface ActivePlan {
   sessionId: string
   toolId: string
   content: string
+  permissionRequestId: string | null
 }
 
 export interface PlanSlice {
   activePlan: ActivePlan | null
   enterPlanMode: (sessionId: string, toolId: string, content: string) => void
+  setPlanPermissionId: (requestId: string) => void
   resolvePlan: (action: 'accept' | 'acceptAutoEdits' | 'reject', feedback?: string) => void
   clearPlan: () => void
 }

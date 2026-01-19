@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   HoverCard,
   HoverCardContent,
@@ -16,7 +17,7 @@ function formatTokens(n: number): string {
   return String(n)
 }
 
-export function ContextUsage({ usage }: ContextUsageProps) {
+export const ContextUsage = memo(function ContextUsage({ usage }: ContextUsageProps) {
   const { inputTokens, outputTokens, cacheReadTokens, cacheCreationTokens, contextWindow } = usage
 
   // Total tokens used (input + output, cache read doesn't count against context)
@@ -103,4 +104,4 @@ export function ContextUsage({ usage }: ContextUsageProps) {
       </HoverCardContent>
     </HoverCard>
   )
-}
+})

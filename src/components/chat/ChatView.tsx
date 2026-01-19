@@ -263,6 +263,8 @@ export function ChatView({
               {pendingQuestions.map((question) => (
                 <AskUserQuestionCard key={question.requestId} question={question} />
               ))}
+              {/* Inline plan approval */}
+              <PlanOverlay />
             </ConversationContent>
           ) : wasCleared ? (
             <div className="flex-1 flex items-center justify-center">
@@ -316,9 +318,6 @@ export function ChatView({
           </div>
         </div>
       )}
-
-      {/* Plan overlay - above input when awaiting approval */}
-      <PlanOverlay />
 
       {/* Input area - fixed height */}
       <footer className="shrink-0 border-t border-border p-4">

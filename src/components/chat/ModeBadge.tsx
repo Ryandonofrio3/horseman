@@ -1,7 +1,6 @@
+import { memo } from 'react'
 import { useStore } from '@/store'
 import type { PermissionMode } from '@/store/types'
-
-const MODE_ORDER: PermissionMode[] = ['default', 'plan', 'acceptEdits', 'bypassPermissions']
 
 const MODE_DISPLAY: Record<PermissionMode, string> = {
   default: 'Normal',
@@ -17,7 +16,7 @@ const MODE_COLORS: Record<PermissionMode, string> = {
   bypassPermissions: 'bg-red-500/15 text-red-600 dark:text-red-400',
 }
 
-export function ModeBadge() {
+export const ModeBadge = memo(function ModeBadge() {
   const mode = useStore((s) => s.permissionMode)
   const cycleMode = useStore((s) => s.cyclePermissionMode)
 
@@ -31,4 +30,4 @@ export function ModeBadge() {
       {MODE_DISPLAY[mode]}
     </button>
   )
-}
+})

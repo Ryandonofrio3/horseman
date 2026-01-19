@@ -12,6 +12,8 @@ import {
   Bot,
   ListTodo,
   MessageCircleQuestion,
+  Map,
+  FileCheck,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -27,6 +29,8 @@ export const TOOL_ICONS: Record<string, LucideIcon> = {
   task: Bot,
   todowrite: ListTodo,
   askuserquestion: MessageCircleQuestion,
+  enterplanmode: Map,
+  exitplanmode: FileCheck,
 }
 
 export const TOOL_COLORS: Record<string, string> = {
@@ -41,6 +45,8 @@ export const TOOL_COLORS: Record<string, string> = {
   task: 'text-cyan-500',
   todowrite: 'text-emerald-500',
   askuserquestion: 'text-pink-500',
+  enterplanmode: 'text-blue-500',
+  exitplanmode: 'text-blue-500',
 }
 
 export function getToolIcon(toolName: string): LucideIcon {
