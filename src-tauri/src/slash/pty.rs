@@ -36,7 +36,14 @@ impl PtySession {
         let child = pair
             .slave
             .spawn_command(cmd)
-            .map_err(|e| format!("Failed to spawn claude: {}", e))?;
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("No such file") || msg.contains("not found") {
+                    config::claude_not_found_error()
+                } else {
+                    format!("Failed to spawn claude: {}", e)
+                }
+            })?;
 
         Ok(Self {
             master: pair.master,

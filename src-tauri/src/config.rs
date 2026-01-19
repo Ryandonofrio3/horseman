@@ -199,6 +199,37 @@ pub fn resolve_claude_binary() -> String {
     fallback
 }
 
+/// Check if claude binary is available (for pre-flight checks)
+pub fn is_claude_available() -> bool {
+    if let Some(configured) = get_config().claude_binary {
+        return PathBuf::from(&configured).exists();
+    }
+    find_claude_binary().is_some()
+}
+
+/// Get a helpful error message when claude is not found
+pub fn claude_not_found_error() -> String {
+    let searched: Vec<String> = claude_search_paths()
+        .iter()
+        .map(|p| format!("  - {}", p.display()))
+        .collect();
+
+    let config_path = config_path()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| "~/Library/Application Support/horseman/config.toml".to_string());
+
+    format!(
+        "Claude CLI not found.\n\n\
+        Searched:\n{}\n\n\
+        To fix:\n\
+        1. Install Claude CLI: npm install -g @anthropic-ai/claude-code\n\
+        2. Or set the path manually in:\n   {}\n\n   \
+        Add: claude_binary = \"/path/to/claude\"",
+        searched.join("\n"),
+        config_path
+    )
+}
+
 /// Get the Claude binary path (default: "claude")
 /// DEPRECATED: Use resolve_claude_binary() instead
 pub fn claude_binary() -> String {

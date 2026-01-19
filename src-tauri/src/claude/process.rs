@@ -175,7 +175,11 @@ impl ClaudeManager {
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| {
-                let err = format!("Failed to spawn claude: {}", e);
+                let err = if e.kind() == std::io::ErrorKind::NotFound {
+                    config::claude_not_found_error()
+                } else {
+                    format!("Failed to spawn claude: {}", e)
+                };
                 debug_log!("SPAWN", "ERROR: {}", err);
                 err
             })?;

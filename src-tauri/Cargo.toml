@@ -24,7 +24,7 @@ tauri-plugin-notification = "2"
 tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros"] }
 axum = "0.7"
 uuid = { version = "1", features = ["v4"] }
 dirs = "5"
@@ -34,4 +34,14 @@ chrono = "0.4.43"
 ignore = "0.4"
 portable-pty = "0.9"
 toml = "0.8"
+
+[profile.dev]
+incremental = true
+
+[profile.release]
+incremental = true       # Faster rebuilds
+lto = "thin"             # Faster than "fat" LTO, still good size
+codegen-units = 16       # Parallel compilation (default 1 is slow)
+opt-level = 2            # Good enough, faster than 3
+strip = true             # Smaller binary
 
