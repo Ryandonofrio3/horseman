@@ -43,12 +43,19 @@ jobs:
           cargo build --release -p horseman-mcp --target x86_64-apple-darwin &
           wait
 
-          # Copy to binaries dir with Tauri's expected naming
           mkdir -p src-tauri/binaries
+
+          # Arch-specific binaries (for compile steps)
           cp target/aarch64-apple-darwin/release/horseman-mcp \
             src-tauri/binaries/horseman-mcp-aarch64-apple-darwin
           cp target/x86_64-apple-darwin/release/horseman-mcp \
             src-tauri/binaries/horseman-mcp-x86_64-apple-darwin
+
+          # Universal binary (for final bundling step)
+          lipo -create \
+            target/aarch64-apple-darwin/release/horseman-mcp \
+            target/x86_64-apple-darwin/release/horseman-mcp \
+            -output src-tauri/binaries/horseman-mcp-universal-apple-darwin
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
