@@ -2,7 +2,9 @@ use crate::config::{self, get_config, resolve_claude_binary};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::Duration;
+use std::io::Read;
 
 /// Diagnostic information for debugging setup issues
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -14,6 +16,10 @@ pub struct DiagnosticsInfo {
     pub config: ConfigDiagnostics,
     /// File access tests
     pub file_access: Vec<FileAccessTest>,
+    /// Spawn test results
+    pub spawn_test: SpawnTestResult,
+    /// Environment info
+    pub environment: EnvironmentInfo,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,6 +78,36 @@ pub struct FileAccessTest {
     pub description: String,
     pub readable: bool,
     pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpawnTestResult {
+    /// Whether spawn succeeded
+    pub success: bool,
+    /// Raw stdout (first 500 chars)
+    pub stdout_preview: Option<String>,
+    /// Raw stderr (first 500 chars)
+    pub stderr_preview: Option<String>,
+    /// Exit code
+    pub exit_code: Option<i32>,
+    /// Error message
+    pub error: Option<String>,
+    /// Command that was run
+    pub command: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvironmentInfo {
+    /// Current working directory
+    pub cwd: Option<String>,
+    /// PATH environment variable
+    pub path_env: Option<String>,
+    /// HOME environment variable
+    pub home_env: Option<String>,
+    /// Whether running in app bundle
+    pub is_bundled: bool,
 }
 
 /// Get search paths (duplicated from config.rs since it's private)
@@ -204,10 +240,122 @@ pub fn get_diagnostics() -> DiagnosticsInfo {
         ));
     }
 
+    // Spawn test - actually try to run claude
+    let spawn_test = run_spawn_test(&claude.resolved_path);
+
+    // Environment info
+    let environment = EnvironmentInfo {
+        cwd: std::env::current_dir().ok().map(|p| p.to_string_lossy().to_string()),
+        path_env: std::env::var("PATH").ok(),
+        home_env: std::env::var("HOME").ok(),
+        is_bundled: std::env::current_exe()
+            .map(|p| p.to_string_lossy().contains(".app/Contents/"))
+            .unwrap_or(false),
+    };
+
     DiagnosticsInfo {
         claude,
         config,
         file_access,
+        spawn_test,
+        environment,
+    }
+}
+
+/// Actually try to spawn claude and capture output
+fn run_spawn_test(claude_path: &str) -> SpawnTestResult {
+    let cmd_str = format!("{} -p --verbose --output-format stream-json --max-turns 1 \"Say exactly: HORSEMAN_TEST_OK\"", claude_path);
+
+    // Try to spawn with timeout
+    let result = Command::new(claude_path)
+        .args([
+            "-p",
+            "--verbose",
+            "--output-format", "stream-json",
+            "--max-turns", "1",
+            "Say exactly: HORSEMAN_TEST_OK"
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn();
+
+    match result {
+        Ok(mut child) => {
+            // Wait with timeout (10 seconds)
+            let timeout = Duration::from_secs(10);
+            let start = std::time::Instant::now();
+
+            loop {
+                match child.try_wait() {
+                    Ok(Some(status)) => {
+                        // Process finished
+                        let mut stdout = String::new();
+                        let mut stderr = String::new();
+
+                        if let Some(mut out) = child.stdout.take() {
+                            let _ = out.read_to_string(&mut stdout);
+                        }
+                        if let Some(mut err) = child.stderr.take() {
+                            let _ = err.read_to_string(&mut stderr);
+                        }
+
+                        let success = status.success() &&
+                            (stdout.contains("HORSEMAN_TEST_OK") || stdout.contains("assistant"));
+
+                        return SpawnTestResult {
+                            success,
+                            stdout_preview: Some(truncate(&stdout, 1000)),
+                            stderr_preview: if stderr.is_empty() { None } else { Some(truncate(&stderr, 500)) },
+                            exit_code: status.code(),
+                            error: if success { None } else { Some("Claude responded but test string not found".to_string()) },
+                            command: cmd_str,
+                        };
+                    }
+                    Ok(None) => {
+                        // Still running
+                        if start.elapsed() > timeout {
+                            let _ = child.kill();
+                            return SpawnTestResult {
+                                success: false,
+                                stdout_preview: None,
+                                stderr_preview: None,
+                                exit_code: None,
+                                error: Some("Timeout after 10 seconds - Claude may be waiting for auth or input".to_string()),
+                                command: cmd_str,
+                            };
+                        }
+                        std::thread::sleep(Duration::from_millis(100));
+                    }
+                    Err(e) => {
+                        return SpawnTestResult {
+                            success: false,
+                            stdout_preview: None,
+                            stderr_preview: None,
+                            exit_code: None,
+                            error: Some(format!("Wait error: {}", e)),
+                            command: cmd_str,
+                        };
+                    }
+                }
+            }
+        }
+        Err(e) => SpawnTestResult {
+            success: false,
+            stdout_preview: None,
+            stderr_preview: None,
+            exit_code: None,
+            error: Some(format!("Spawn failed: {}", e)),
+            command: cmd_str,
+        },
+    }
+}
+
+fn truncate(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}... [truncated]", &s[..max_len])
     }
 }
 

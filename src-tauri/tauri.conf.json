@@ -27,6 +27,14 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/Ryandonofrio3/horseman/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZBRTFERTc2MjU5NTQ0NEUKUldST1JKVWxkdDdoK2crM29sVkVxSkxGTDRsNk5pNDhYdk01UC96ZnpZVWtOaGFhcDE4RU9POGsK"
+    }
+  },
   "bundle": {
     "active": true,
     "targets": ["dmg", "app"],

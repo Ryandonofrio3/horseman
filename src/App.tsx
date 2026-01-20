@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { open } from '@tauri-apps/plugin-dialog'
 import { nanoid } from 'nanoid'
 import { useHorsemanEvents } from '@/hooks/useHorsemanEvents'
+import { useUpdater } from '@/hooks/useUpdater'
+import { toast } from 'sonner'
 import { useStore } from '@/store'
 import {
   useActiveSession,
@@ -63,6 +65,25 @@ function App() {
 
   const [discoveredSessions, setDiscoveredSessions] = useState<DiscoveredSession[]>([])
   const [loadingDiscovered, setLoadingDiscovered] = useState(true)
+
+  // Check for updates on launch
+  const { checkForUpdates, downloadAndInstall } = useUpdater()
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      const update = await checkForUpdates(true) // silent check
+      if (update) {
+        toast.info(`Update available: ${update.version}`, {
+          description: 'Go to Settings to download and install.',
+          duration: 10000,
+          action: {
+            label: 'Update Now',
+            onClick: () => downloadAndInstall(),
+          },
+        })
+      }
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const activeSession = useActiveSession()
   const sessionEvents = useSessionEvents(activeSessionId)

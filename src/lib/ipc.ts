@@ -38,6 +38,24 @@ export interface DiagnosticsInfo {
   claude: ClaudeDiagnostics
   config: ConfigDiagnostics
   fileAccess: FileAccessTest[]
+  spawnTest: SpawnTestResult
+  environment: EnvironmentInfo
+}
+
+export interface SpawnTestResult {
+  success: boolean
+  stdoutPreview: string | null
+  stderrPreview: string | null
+  exitCode: number | null
+  error: string | null
+  command: string
+}
+
+export interface EnvironmentInfo {
+  cwd: string | null
+  pathEnv: string | null
+  homeEnv: string | null
+  isBundled: boolean
 }
 
 export interface ClaudeDiagnostics {

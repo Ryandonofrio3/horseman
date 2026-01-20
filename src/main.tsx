@@ -9,6 +9,8 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import { useStore } from "./store";
 import { DiffsProvider } from "./providers/DiffsProvider";
+import { Toaster } from "./components/ui/sonner";
+import { ThemeProvider } from "next-themes";
 import "./styles/globals.css";
 
 // Dev tools for synthetic event testing
@@ -43,10 +45,13 @@ function HydrationGuard({ children }: { children: React.ReactNode }) {
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <HydrationGuard>
-      <DiffsProvider>
-        <App />
-      </DiffsProvider>
-    </HydrationGuard>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <HydrationGuard>
+        <DiffsProvider>
+          <App />
+          <Toaster position="bottom-right" />
+        </DiffsProvider>
+      </HydrationGuard>
+    </ThemeProvider>
   </React.StrictMode>,
 );

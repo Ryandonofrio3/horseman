@@ -11,8 +11,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
+import { Progress } from '@/components/ui/progress'
 import { ipc, type HorsemanConfig, type DiagnosticsInfo } from '@/lib/ipc'
-import { Loader2, RotateCcw, FolderOpen, Bug, CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
+import { Loader2, RotateCcw, FolderOpen, Bug, CheckCircle2, XCircle, AlertCircle, Download, RefreshCw } from 'lucide-react'
+import { useUpdater } from '@/hooks/useUpdater'
+import { getVersion } from '@tauri-apps/api/app'
 
 interface SettingsModalProps {
   open: boolean
@@ -34,6 +37,24 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [error, setError] = useState<string | null>(null)
   const [diagnostics, setDiagnostics] = useState<DiagnosticsInfo | null>(null)
   const [isDiagnosticsLoading, setIsDiagnosticsLoading] = useState(false)
+  const [appVersion, setAppVersion] = useState<string | null>(null)
+
+  // Updater state
+  const {
+    checking: isCheckingUpdate,
+    downloading: isDownloading,
+    hasUpdate,
+    updateVersion,
+    downloadProgress,
+    error: updateError,
+    checkForUpdates,
+    downloadAndInstall,
+  } = useUpdater()
+
+  // Get app version on mount
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => {})
+  }, [])
 
   // Load config when modal opens
   useEffect(() => {
@@ -195,6 +216,68 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
             <Separator />
 
+            {/* Updates Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-muted-foreground">Updates</h3>
+                <div className="flex items-center gap-2">
+                  {appVersion && (
+                    <span className="text-xs text-muted-foreground">v{appVersion}</span>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => checkForUpdates(false)}
+                    disabled={isCheckingUpdate || isDownloading}
+                  >
+                    {isCheckingUpdate ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                    )}
+                    Check for Updates
+                  </Button>
+                </div>
+              </div>
+
+              {hasUpdate && (
+                <div className="rounded-md border p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Download className="h-4 w-4 text-blue-500" />
+                    <span className="font-medium">Update available: {updateVersion}</span>
+                  </div>
+
+                  {isDownloading ? (
+                    <div className="space-y-2">
+                      <Progress value={downloadProgress} className="h-2" />
+                      <p className="text-xs text-muted-foreground">
+                        Downloading... {downloadProgress}%
+                      </p>
+                    </div>
+                  ) : (
+                    <Button onClick={downloadAndInstall} className="w-full">
+                      <Download className="h-4 w-4 mr-2" />
+                      Download and Install
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {!hasUpdate && !isCheckingUpdate && (
+                <p className="text-sm text-muted-foreground">
+                  You're on the latest version.
+                </p>
+              )}
+
+              {updateError && (
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                  {updateError}
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
             {/* Diagnostics Section */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -279,6 +362,54 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     </div>
                   </div>
 
+                  {/* Spawn Test - THE IMPORTANT ONE */}
+                  <div className="rounded-md border p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      {diagnostics.spawnTest.success ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-500" />
+                      )}
+                      <span className="font-medium">Spawn Test (Hello World)</span>
+                    </div>
+                    <div className="text-xs space-y-1">
+                      <p className={diagnostics.spawnTest.success ? 'text-green-600' : 'text-red-500'}>
+                        {diagnostics.spawnTest.success ? '✓ Claude responded successfully' : '✗ Failed to get response'}
+                      </p>
+                      {diagnostics.spawnTest.error && (
+                        <p className="text-red-500 font-medium">{diagnostics.spawnTest.error}</p>
+                      )}
+                      {diagnostics.spawnTest.exitCode !== null && (
+                        <p className="text-muted-foreground">Exit code: {diagnostics.spawnTest.exitCode}</p>
+                      )}
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-muted-foreground">Command & output</summary>
+                        <div className="mt-1 space-y-2">
+                          <p className="text-muted-foreground">Command:</p>
+                          <pre className="p-2 bg-muted rounded text-[10px] overflow-auto whitespace-pre-wrap break-all">
+                            {diagnostics.spawnTest.command}
+                          </pre>
+                          {diagnostics.spawnTest.stdoutPreview && (
+                            <>
+                              <p className="text-muted-foreground">Stdout:</p>
+                              <pre className="p-2 bg-muted rounded text-[10px] overflow-auto max-h-32 whitespace-pre-wrap break-all">
+                                {diagnostics.spawnTest.stdoutPreview}
+                              </pre>
+                            </>
+                          )}
+                          {diagnostics.spawnTest.stderrPreview && (
+                            <>
+                              <p className="text-muted-foreground text-red-500">Stderr:</p>
+                              <pre className="p-2 bg-red-50 dark:bg-red-950 rounded text-[10px] overflow-auto max-h-32 whitespace-pre-wrap break-all text-red-600">
+                                {diagnostics.spawnTest.stderrPreview}
+                              </pre>
+                            </>
+                          )}
+                        </div>
+                      </details>
+                    </div>
+                  </div>
+
                   {/* File Access */}
                   <div className="rounded-md border p-3 space-y-2">
                     <div className="flex items-center gap-2">
@@ -306,6 +437,25 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       ))}
                     </ul>
                   </div>
+
+                  {/* Environment */}
+                  <details className="rounded-md border p-3">
+                    <summary className="cursor-pointer text-sm font-medium flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                      Environment
+                    </summary>
+                    <div className="mt-2 text-xs space-y-1 text-muted-foreground">
+                      <p>Bundled app: {diagnostics.environment.isBundled ? 'Yes' : 'No (dev mode)'}</p>
+                      <p>CWD: <code>{diagnostics.environment.cwd ?? 'N/A'}</code></p>
+                      <p>HOME: <code>{diagnostics.environment.homeEnv ?? 'N/A'}</code></p>
+                      <details>
+                        <summary className="cursor-pointer">PATH</summary>
+                        <pre className="mt-1 p-2 bg-muted rounded text-[10px] overflow-auto max-h-24 whitespace-pre-wrap break-all">
+                          {diagnostics.environment.pathEnv?.split(':').join('\n') ?? 'N/A'}
+                        </pre>
+                      </details>
+                    </div>
+                  </details>
 
                   <p className="text-xs text-muted-foreground">
                     Full diagnostics logged to console (Cmd+Option+I)

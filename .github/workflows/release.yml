@@ -63,6 +63,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.event.inputs.version || github.ref_name }}
           releaseName: 'Horseman ${{ github.event.inputs.version || github.ref_name }}'
@@ -77,9 +79,13 @@ jobs:
             - macOS 10.15+
             - [Claude Code CLI](https://github.com/anthropics/claude-code) installed
 
+            ### Auto-Updates
+            This version supports auto-updates! Check Settings → Updates.
+
             ⚠️ This is an early alpha release. Expect bugs!
           releaseDraft: true
           prerelease: true
+          updaterJsonKeepUniversal: true
           args: --target universal-apple-darwin
 
   # Future: Add Windows/Linux builds
