@@ -200,12 +200,12 @@ pub fn resolve_claude_binary() -> String {
 }
 
 /// Check if claude binary is available (for pre-flight checks)
-pub fn is_claude_available() -> bool {
-    if let Some(configured) = get_config().claude_binary {
-        return PathBuf::from(&configured).exists();
-    }
-    find_claude_binary().is_some()
-}
+// pub fn is_claude_available() -> bool {
+//     if let Some(configured) = get_config().claude_binary {
+//         return PathBuf::from(&configured).exists();
+//     }
+//     find_claude_binary().is_some()
+// }
 
 /// Get a helpful error message when claude is not found
 pub fn claude_not_found_error() -> String {

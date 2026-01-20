@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Allow app to inherit permissions from parent process -->
+    <key>com.apple.security.inherit</key>
+    <true/>
+
+    <!-- Access user-selected files/folders (remembered between launches) -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+
+    <!-- Security-scoped bookmarks (persist folder access) -->
+    <key>com.apple.security.files.bookmarks.app-scope</key>
+    <true/>
+
+    <!-- Access Downloads folder -->
+    <key>com.apple.security.files.downloads.read-write</key>
+    <true/>
+</dict>
+</plist>
