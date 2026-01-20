@@ -282,49 +282,52 @@ export function ChatView({
         />
 
         <Conversation className="flex-1 min-h-0">
-          {hasMessages ? (
-            <ConversationContent className="gap-4">
-              <MessageList
-                messages={messages}
-                isWorking={isWorking}
-                workingDirectory={workingDirectory}
-                searchQuery={searchQuery}
-                currentMatchMessageId={currentMatchDetails?.messageId}
-                currentMatchIndexInMessage={currentMatchDetails?.matchIndex}
-                isSearchActive={isSearchOpen}
-                compactionEvents={compactionEvents}
-                allTools={allTools}
+          <ConversationContent className="gap-4 min-h-full">
+            {hasMessages ? (
+              <>
+                <MessageList
+                  messages={messages}
+                  isWorking={isWorking}
+                  workingDirectory={workingDirectory}
+                  searchQuery={searchQuery}
+                  currentMatchMessageId={currentMatchDetails?.messageId}
+                  currentMatchIndexInMessage={currentMatchDetails?.matchIndex}
+                  isSearchActive={isSearchOpen}
+                  compactionEvents={compactionEvents}
+                  allTools={allTools}
+                />
+                {/* Inline permission requests */}
+                {nextPermission && (
+                  <PermissionCard
+                    key={nextPermission.requestId}
+                    permission={nextPermission}
+                    queueTotal={pendingPermissions.length}
+                  />
+                )}
+                {/* Inline question requests - show one at a time like permissions */}
+                {pendingQuestions[0] && (
+                  <AskUserQuestionCard
+                    key={pendingQuestions[0].requestId}
+                    question={pendingQuestions[0]}
+                    queueTotal={pendingQuestions.length}
+                  />
+                )}
+                {/* Inline plan approval */}
+                <PlanOverlay />
+              </>
+            ) : wasCleared ? (
+              <div className="flex-1 flex items-center justify-center">
+                <StatusLine>Conversation cleared</StatusLine>
+              </div>
+            ) : (
+              <ConversationEmptyState
+                className="flex-1"
+                title="Start a conversation"
+                description={`Ask Claude Code to help with ${folderName}`}
+                icon={<MessageSquare className="h-8 w-8" />}
               />
-              {/* Inline permission requests */}
-              {nextPermission && (
-                <PermissionCard
-                  key={nextPermission.requestId}
-                  permission={nextPermission}
-                  queueTotal={pendingPermissions.length}
-                />
-              )}
-              {/* Inline question requests - show one at a time like permissions */}
-              {pendingQuestions[0] && (
-                <AskUserQuestionCard
-                  key={pendingQuestions[0].requestId}
-                  question={pendingQuestions[0]}
-                  queueTotal={pendingQuestions.length}
-                />
-              )}
-              {/* Inline plan approval */}
-              <PlanOverlay />
-            </ConversationContent>
-          ) : wasCleared ? (
-            <div className="flex-1 flex items-center justify-center">
-              <StatusLine>Conversation cleared</StatusLine>
-            </div>
-          ) : (
-            <ConversationEmptyState
-              title="Start a conversation"
-              description={`Ask Claude Code to help with ${folderName}`}
-              icon={<MessageSquare className="h-8 w-8" />}
-            />
-          )}
+            )}
+          </ConversationContent>
           {/* Scroll button - sticky positioning keeps it visible */}
           {hasMessages && <ConversationScrollButton />}
         </Conversation>

@@ -1,3 +1,5 @@
+// Permission card UI for tool approval requests
+// Shows approve/deny buttons for tools requiring user authorization
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Check, X, ShieldAlert } from 'lucide-react'

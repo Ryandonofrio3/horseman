@@ -685,6 +685,36 @@ Task tools spawn subagents that log to separate files: `{agentId}.jsonl`. These 
 
 ---
 
+## D017: Diffs Syntax Highlighting Uses Token CSS Vars in Fallback
+
+**Decision:** Keep `DIFFS_UNSAFE_CSS_FALLBACK` mapped to token variables
+(`--diffs-token-light/dark` and token background vars) and always pass `unsafeCSS`
+to diffs components.
+
+**Context:**
+`@pierre/diffs` renders in Shadow DOM and relies on `light-dark()` plus token CSS
+variables for Shiki colors. On older WebViews that lack `light-dark()` support, a
+fallback is required. If the fallback uses only `--diffs-light/--diffs-dark`, all
+tokens collapse to a single color even though highlight callbacks fire.
+
+**Alternatives Considered:**
+- Remove fallback entirely → works only on modern engines.
+- Use base `--diffs-light/--diffs-dark` for token color → breaks syntax coloring.
+
+**Consequences:**
+- Do not simplify the fallback or remove `unsafeCSS` from `CodeDisplay` /
+  `DiffDisplay`.
+- Theme tweaks should use `diffs-container` overrides or token vars, not global text color.
+
+**Code Locations:**
+- `src/lib/diffs.ts` - `DIFFS_UNSAFE_CSS_FALLBACK`
+- `src/components/chat/CodeDisplay.tsx` - `unsafeCSS` wiring
+- `src/components/chat/DiffDisplay.tsx` - `unsafeCSS` wiring
+- `src/providers/DiffsProvider.tsx` - worker pool / theme config
+- `src/styles/globals.css` - `diffs-container` overrides
+
+---
+
 ## Adding New Decisions
 
 When making architectural decisions, document them here:

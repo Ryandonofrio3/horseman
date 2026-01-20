@@ -22,7 +22,7 @@ import { needsAttention } from '@/store/selectors'
 import { STATUS_COLORS } from '@/constants'
 import type { SortOrder } from '@/store/types'
 import type { SessionStatus } from '@/domain'
-import { Plus, Settings, FolderOpen, Loader2, MessageSquare, ChevronRight, ChevronDown, Folder, PanelLeftClose, Pencil, Trash2, ArrowUpDown, EyeOff, Eye } from 'lucide-react'
+import { Plus, Settings, FolderOpen, Loader2, MessageSquare, ChevronRight, ChevronDown, Folder, PanelLeftClose, Pencil, Trash2, ArrowUpDown, EyeOff, Eye, Copy } from 'lucide-react'
 import type { DiscoveredSession } from '@/lib/ipc'
 import type { Session } from '@/domain'
 
@@ -40,6 +40,9 @@ interface SessionItemProps {
     status: SessionStatus
     isDiscovered: boolean
     discoveredSession?: DiscoveredSession
+    claudeSessionId?: string
+    workingDirectory?: string
+    createdAt?: string
   }
   isActive: boolean
   isEditing: boolean
@@ -92,6 +95,20 @@ const SessionItem = memo(function SessionItem({
   const handleDelete = useCallback(() => {
     onDelete?.(session.id)
   }, [onDelete, session.id])
+
+  const handleCopyInfo = useCallback(() => {
+    const info = [
+      `Session: ${session.fullName}`,
+      `UI ID: ${session.id}`,
+      session.claudeSessionId ? `Claude ID: ${session.claudeSessionId}` : null,
+      session.workingDirectory ? `Directory: ${session.workingDirectory}` : null,
+      session.createdAt ? `Created: ${session.createdAt}` : null,
+      `Last Active: ${session.date}`,
+      `Status: ${session.status}`,
+      session.isDiscovered ? `Source: CLI (discovered)` : `Source: Horseman`,
+    ].filter(Boolean).join('\n')
+    navigator.clipboard.writeText(info)
+  }, [session])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -153,6 +170,10 @@ const SessionItem = memo(function SessionItem({
           <Pencil className="h-4 w-4" />
           Rename
         </ContextMenuItem>
+        <ContextMenuItem onClick={handleCopyInfo}>
+          <Copy className="h-4 w-4" />
+          Copy Session Info
+        </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem
           variant="destructive"
@@ -196,6 +217,9 @@ interface ProjectGroup {
     status: SessionStatus
     isDiscovered: boolean
     discoveredSession?: DiscoveredSession
+    claudeSessionId?: string
+    workingDirectory?: string
+    createdAt?: string
   }>
 }
 
@@ -236,6 +260,9 @@ function groupByProject(
       date: session.lastActiveAt,
       status: session.status,
       isDiscovered: session.isDiscovered || false,
+      claudeSessionId: session.claudeSessionId,
+      workingDirectory: session.workingDirectory,
+      createdAt: session.createdAt,
     })
   }
 
@@ -268,6 +295,9 @@ function groupByProject(
       status: 'idle',
       isDiscovered: true,
       discoveredSession: ds,
+      claudeSessionId: ds.id, // For discovered sessions, the id IS the Claude session ID
+      workingDirectory: ds.working_directory,
+      createdAt: ds.modified_at, // Use modified_at as best approximation
     })
   }
 

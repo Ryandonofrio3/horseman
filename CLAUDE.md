@@ -112,6 +112,25 @@ horseman-mcp/                  # Separate MCP server binary
 
 ---
 
+## Syntax Highlighting (Diffs/Shiki)
+
+We use `@pierre/diffs` (Shadow DOM) for all code blocks and diffs. Shiki token colors
+are applied via CSS variables like `--diffs-token-light` / `--diffs-token-dark`.
+If token colors disappear (highlight callbacks still fire but everything is monochrome),
+the **unsafe CSS fallback** is usually the culprit.
+
+**Rule:** The fallback must reference the **token variables**, not just `--diffs-light` /
+`--diffs-dark`, or token colors collapse to a single text color.
+
+**Key files:**
+- `src/lib/diffs.ts` - `DIFFS_UNSAFE_CSS_FALLBACK` (uses token vars)
+- `src/components/chat/CodeDisplay.tsx` - passes `unsafeCSS`
+- `src/components/chat/DiffDisplay.tsx` - passes `unsafeCSS`
+- `src/providers/DiffsProvider.tsx` - worker pool + theme/lang config
+- `src/styles/globals.css` - `diffs-container` color overrides
+
+---
+
 ## Key Abstractions
 
 | Abstraction | Location | Why You Must Use It |

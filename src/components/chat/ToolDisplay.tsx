@@ -10,6 +10,14 @@ import { DiffDisplay } from './DiffDisplay'
 import { SubagentDisplay } from './SubagentDisplay'
 import { PlanFileDisplay } from './PlanFileDisplay'
 
+/**
+ * Strip Claude's line number format from Read tool output.
+ * Format: "     1→\t" (space-padded number + arrow + optional tab)
+ */
+function stripClaudeLineNumbers(output: string): string {
+  return output.replace(/^ *\d+→\t?/gm, '')
+}
+
 // Check if this is a plan file write (to ~/.claude/plans/)
 function isPlanFileWrite(tool: ToolCall): boolean {
   if (tool.name !== 'Write') return false
@@ -171,13 +179,14 @@ function ToolOutputContent({ tool }: { tool: ToolCall }) {
 
   if (!tool.output) return null
 
-  // Read tool - show with syntax highlighting
+  // Read tool - show with syntax highlighting (strip Claude's line numbers)
   if (tool.name === 'Read') {
     const filePath = (tool.input.file_path as string) || 'file.txt'
+    const code = stripClaudeLineNumbers(tool.output)
 
     return (
       <CodeDisplay
-        code={tool.output}
+        code={code}
         filename={filePath}
         className="max-h-64 overflow-auto rounded border border-border/40"
       />

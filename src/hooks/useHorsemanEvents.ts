@@ -26,6 +26,7 @@ export function useHorsemanEvents({
   const updateToolOutput = useStore((s) => s.updateToolOutput)
   const updateToolFields = useStore((s) => s.updateToolFields)
   const updateSession = useStore((s) => s.updateSession)
+  const completeAllRunningTools = useStore((s) => s.completeAllRunningTools)
   const addPendingPermission = useStore((s) => s.addPendingPermission)
   const addPendingQuestion = useStore((s) => s.addPendingQuestion)
   const removePendingPermission = useStore((s) => s.removePendingPermission)
@@ -95,6 +96,8 @@ export function useHorsemanEvents({
             break
           }
           case 'session.ended': {
+            // Mark all running tools as completed before updating session status
+            completeAllRunningTools(payload.uiSessionId)
             updateSession(payload.uiSessionId, {
               status: payload.error ? 'error' : 'idle',
             })
@@ -184,10 +187,19 @@ export function useHorsemanEvents({
               break
             }
 
-            const isEditTool = ['Edit', 'Write'].includes(payload.toolName)
+            const isEditTool = ['Edit', 'Write', 'NotebookEdit'].includes(payload.toolName)
+            // Truly read-only tools that never need permission
+            const isReadOnlyTool = ['Read', 'Glob', 'Grep'].includes(payload.toolName)
 
             // Bypass All mode - auto-approve everything
             if (mode === 'bypassPermissions') {
+              ipc.permissions.respond(payload.requestId, true, {}).catch(console.error)
+              break
+            }
+
+            // Plan mode - auto-approve ONLY read-only tools (Read, Glob, Grep)
+            // Everything else (Bash, WebSearch, WebFetch, Task, Edit, Write) needs approval
+            if (mode === 'plan' && isReadOnlyTool) {
               ipc.permissions.respond(payload.requestId, true, {}).catch(console.error)
               break
             }
@@ -312,6 +324,7 @@ export function useHorsemanEvents({
     updateToolOutput,
     updateToolFields,
     updateSession,
+    completeAllRunningTools,
     addPendingPermission,
     addPendingQuestion,
     removePendingPermission,

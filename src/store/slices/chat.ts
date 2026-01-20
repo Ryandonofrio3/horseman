@@ -287,4 +287,52 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
     const sessionState = get().sessions[sessionId]
     return sessionState ? sessionState.messages.length > 0 : false
   },
+
+  completeAllRunningTools: (sessionId: string) =>
+    set((state) => {
+      const sessionState = state.sessions[sessionId]
+      if (!sessionState) return state
+
+      // Find all running tools
+      const runningToolIds = Object.entries(sessionState.toolsById)
+        .filter(([, tool]) => tool.status === 'running')
+        .map(([id]) => id)
+
+      if (runningToolIds.length === 0) return state
+
+      const endedAt = new Date().toISOString()
+
+      // Update toolsById
+      const nextToolsById = { ...sessionState.toolsById }
+      for (const toolId of runningToolIds) {
+        nextToolsById[toolId] = {
+          ...nextToolsById[toolId],
+          status: 'completed',
+          endedAt,
+        }
+      }
+
+      // Update tools in messages
+      const nextMessages = sessionState.messages.map((message) => {
+        if (!message.toolCalls) return message
+        const hasRunningTool = message.toolCalls.some((t) => runningToolIds.includes(t.id))
+        if (!hasRunningTool) return message
+        return {
+          ...message,
+          toolCalls: message.toolCalls.map((tool) =>
+            runningToolIds.includes(tool.id)
+              ? { ...tool, status: 'completed' as const, endedAt }
+              : tool
+          ),
+        }
+      })
+
+      const nextSessions = { ...state.sessions }
+      nextSessions[sessionId] = {
+        ...sessionState,
+        messages: nextMessages,
+        toolsById: nextToolsById,
+      }
+      return { sessions: nextSessions }
+    }),
 })

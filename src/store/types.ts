@@ -62,6 +62,9 @@ export interface ChatSlice {
 
   // Check if session has messages
   hasMessages: (sessionId: string) => boolean
+
+  // Mark all running tools as completed (called when session ends)
+  completeAllRunningTools: (sessionId: string) => void
 }
 
 export type ModelAlias = 'sonnet' | 'opus' | 'haiku'

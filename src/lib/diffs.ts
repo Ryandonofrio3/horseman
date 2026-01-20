@@ -19,18 +19,30 @@ export const DIFFS_UNSAFE_CSS_FALLBACK = `
 @supports not (color: light-dark(white, black)) {
   /* Light theme default */
   [data-diffs] [data-column-content] span {
-    color: var(--diffs-light) !important;
+    color: var(--diffs-token-light, var(--diffs-light)) !important;
+  }
+
+  [data-diffs] [data-column-content] span:not([data-diff-span]) {
+    background-color: var(--diffs-token-light-bg, inherit) !important;
   }
 
   /* Dark theme explicit */
   [data-diffs][data-theme-type='dark'] [data-column-content] span {
-    color: var(--diffs-dark) !important;
+    color: var(--diffs-token-dark, var(--diffs-dark)) !important;
+  }
+
+  [data-diffs][data-theme-type='dark'] [data-column-content] span:not([data-diff-span]) {
+    background-color: var(--diffs-token-dark-bg, inherit) !important;
   }
 
   /* System theme: respect OS preference */
   @media (prefers-color-scheme: dark) {
     [data-diffs]:not([data-theme-type='light']) [data-column-content] span {
-      color: var(--diffs-dark) !important;
+      color: var(--diffs-token-dark, var(--diffs-dark)) !important;
+    }
+
+    [data-diffs]:not([data-theme-type='light']) [data-column-content] span:not([data-diff-span]) {
+      background-color: var(--diffs-token-dark-bg, inherit) !important;
     }
   }
 }

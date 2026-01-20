@@ -222,6 +222,18 @@ Parent: overflow-hidden
 Scrollable: flex-1 min-h-0  ← min-h-0 is critical!
 ```
 
+### Syntax Highlighting (diffs)
+
+**If highlighting "works" but looks flat/monochrome**, the unsafe CSS fallback is usually wrong.
+The @pierre/diffs Shadow DOM relies on token variables like `--diffs-token-light` and
+`--diffs-token-dark`. The fallback **must** reference those variables, not just
+`--diffs-light`/`--diffs-dark`, or all tokens collapse to a single color.
+
+**Required fallback (see `src/lib/diffs.ts`):**
+- Use `--diffs-token-light` / `--diffs-token-dark` for token color.
+- Use `--diffs-token-light-bg` / `--diffs-token-dark-bg` for token background.
+- Keep `unsafeCSS` wired in `CodeDisplay` + `DiffDisplay`.
+
 ---
 
 ## Permission System (MCP-based)
