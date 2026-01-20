@@ -27,6 +27,7 @@ use commands::{
     run_slash_command,
     cancel_slash_command,
     get_status_info,
+    get_diagnostics,
 };
 use config::{get_horseman_config, update_horseman_config, get_config_path};
 use slash::SlashState;
@@ -113,6 +114,7 @@ pub fn run() {
             update_horseman_config,
             get_config_path,
             get_status_info,
+            get_diagnostics,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

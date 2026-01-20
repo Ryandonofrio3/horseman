@@ -33,6 +33,50 @@ export interface HorsemanConfig {
   contextWindow: number | null
 }
 
+// Diagnostics types
+export interface DiagnosticsInfo {
+  claude: ClaudeDiagnostics
+  config: ConfigDiagnostics
+  fileAccess: FileAccessTest[]
+}
+
+export interface ClaudeDiagnostics {
+  resolvedPath: string
+  exists: boolean
+  executable: boolean
+  version: string | null
+  error: string | null
+  searchPaths: SearchPathInfo[]
+}
+
+export interface SearchPathInfo {
+  path: string
+  exists: boolean
+  isFile: boolean
+}
+
+export interface ConfigDiagnostics {
+  path: string | null
+  exists: boolean
+  rawContents: string | null
+  parsed: ParsedConfig | null
+  parseError: string | null
+}
+
+export interface ParsedConfig {
+  claudeBinary: string | null
+  projectsDir: string | null
+  debugLogPath: string | null
+  contextWindow: number | null
+}
+
+export interface FileAccessTest {
+  path: string
+  description: string
+  readable: boolean
+  error: string | null
+}
+
 export interface StatusInfo {
   version: string | null
   subscription_type: string | null
@@ -166,5 +210,8 @@ export const ipc = {
   status: {
     get: (workingDirectory: string) =>
       invoke<StatusInfo>('get_status_info', { workingDirectory }),
+  },
+  diagnostics: {
+    get: () => invoke<DiagnosticsInfo>('get_diagnostics'),
   },
 }

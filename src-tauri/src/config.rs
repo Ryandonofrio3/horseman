@@ -10,7 +10,7 @@ static RESOLVED_CLAUDE_BINARY: Lazy<Mutex<Option<String>>> = Lazy::new(|| Mutex:
 
 /// User-configurable settings for Horseman
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(default)]
+#[serde(default, rename_all = "camelCase")]
 pub struct HorsemanConfig {
     /// Path to Claude CLI binary (default: "claude")
     pub claude_binary: Option<String>,
@@ -137,17 +137,24 @@ fn claude_search_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
 
     if let Some(home) = dirs::home_dir() {
-        // User-local installations (most common)
+        // Native installer (curl install.sh) - highest priority
+        paths.push(home.join(".claude/bin/claude"));
+        paths.push(home.join(".claude/local/bin/claude"));
+
+        // User-local installations
         paths.push(home.join(".local/bin/claude"));
         paths.push(home.join(".bun/bin/claude"));
         paths.push(home.join(".npm-global/bin/claude"));
         paths.push(home.join(".nvm/current/bin/claude"));
         paths.push(home.join(".volta/bin/claude"));
+
+        // npm without custom prefix
+        paths.push(home.join(".npm/bin/claude"));
     }
 
-    // System-wide installations
-    paths.push(PathBuf::from("/usr/local/bin/claude"));
+    // System-wide installations (Homebrew, manual)
     paths.push(PathBuf::from("/opt/homebrew/bin/claude"));
+    paths.push(PathBuf::from("/usr/local/bin/claude"));
     paths.push(PathBuf::from("/usr/bin/claude"));
 
     paths
@@ -222,8 +229,9 @@ pub fn claude_not_found_error() -> String {
         "Claude CLI not found.\n\n\
         Searched:\n{}\n\n\
         To fix:\n\
-        1. Install Claude CLI: npm install -g @anthropic-ai/claude-code\n\
-        2. Or set the path manually in:\n   {}\n\n   \
+        1. Install Claude Code: curl -fsSL https://claude.ai/install.sh | bash\n\
+        2. Or via Homebrew: brew install --cask claude-code\n\
+        3. Or set path manually in:\n   {}\n\n   \
         Add: claude_binary = \"/path/to/claude\"",
         searched.join("\n"),
         config_path
@@ -268,4 +276,79 @@ pub fn update_horseman_config(config: HorsemanConfig) -> Result<HorsemanConfig, 
 #[tauri::command]
 pub fn get_config_path() -> Option<String> {
     config_path().map(|p| p.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_serializes_to_camel_case() {
+        let config = HorsemanConfig {
+            claude_binary: Some("/usr/bin/claude".to_string()),
+            projects_dir: Some(PathBuf::from("/home/user/.claude/projects")),
+            debug_log_path: None,
+            context_window: Some(150000),
+        };
+
+        let json = serde_json::to_string(&config).unwrap();
+
+        // Should use camelCase, not snake_case
+        assert!(json.contains("claudeBinary"), "expected camelCase: {}", json);
+        assert!(json.contains("projectsDir"), "expected camelCase: {}", json);
+        assert!(json.contains("contextWindow"), "expected camelCase: {}", json);
+        assert!(!json.contains("claude_binary"), "got snake_case: {}", json);
+    }
+
+    #[test]
+    fn config_deserializes_from_camel_case() {
+        let json = r#"{
+            "claudeBinary": "/opt/homebrew/bin/claude",
+            "projectsDir": "/tmp/projects",
+            "debugLogPath": null,
+            "contextWindow": 100000
+        }"#;
+
+        let config: HorsemanConfig = serde_json::from_str(json).unwrap();
+
+        assert_eq!(config.claude_binary, Some("/opt/homebrew/bin/claude".to_string()));
+        assert_eq!(config.projects_dir, Some(PathBuf::from("/tmp/projects")));
+        assert_eq!(config.debug_log_path, None);
+        assert_eq!(config.context_window, Some(100000));
+    }
+
+    #[test]
+    fn config_defaults_work() {
+        let json = "{}";
+        let config: HorsemanConfig = serde_json::from_str(json).unwrap();
+
+        assert_eq!(config.claude_binary, None);
+        assert_eq!(config.projects_dir, None);
+        assert_eq!(config.context_window, None);
+    }
+
+    #[test]
+    fn search_paths_include_common_locations() {
+        let paths = claude_search_paths();
+        let path_strs: Vec<String> = paths.iter().map(|p| p.to_string_lossy().to_string()).collect();
+
+        // Native installer paths
+        assert!(path_strs.iter().any(|p| p.contains(".claude/bin/claude")),
+            "missing native installer path ~/.claude/bin/claude");
+
+        // Homebrew
+        assert!(path_strs.iter().any(|p| p == "/opt/homebrew/bin/claude"),
+            "missing homebrew path");
+
+        // System
+        assert!(path_strs.iter().any(|p| p == "/usr/local/bin/claude"),
+            "missing /usr/local/bin path");
+    }
+
+    #[test]
+    fn context_window_default() {
+        // With None, should return 200000
+        let config = HorsemanConfig::default();
+        assert_eq!(config.context_window.unwrap_or(200000), 200000);
+    }
 }

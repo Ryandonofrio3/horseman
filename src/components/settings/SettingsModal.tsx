@@ -11,8 +11,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import { ipc, type HorsemanConfig } from '@/lib/ipc'
-import { Loader2, RotateCcw, FolderOpen } from 'lucide-react'
+import { ipc, type HorsemanConfig, type DiagnosticsInfo } from '@/lib/ipc'
+import { Loader2, RotateCcw, FolderOpen, Bug, CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
 
 interface SettingsModalProps {
   open: boolean
@@ -32,6 +32,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsInfo | null>(null)
+  const [isDiagnosticsLoading, setIsDiagnosticsLoading] = useState(false)
 
   // Load config when modal opens
   useEffect(() => {
@@ -65,6 +67,20 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     setConfig(DEFAULT_CONFIG)
   }, [])
 
+  const runDiagnostics = useCallback(async () => {
+    setIsDiagnosticsLoading(true)
+    try {
+      const result = await ipc.diagnostics.get()
+      setDiagnostics(result)
+      // Also log to console for easy copy/paste
+      console.log('Horseman Diagnostics:', JSON.stringify(result, null, 2))
+    } catch (e) {
+      setError(`Diagnostics failed: ${e}`)
+    } finally {
+      setIsDiagnosticsLoading(false)
+    }
+  }, [])
+
   const updateField = useCallback(
     <K extends keyof HorsemanConfig>(field: K, value: HorsemanConfig[K]) => {
       setConfig((prev) => ({ ...prev, [field]: value }))
@@ -80,8 +96,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
             Configure Horseman paths and behavior. Leave blank for defaults.
@@ -93,7 +109,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="space-y-6 py-4">
+          <div className="space-y-6 py-4 overflow-y-auto flex-1 min-h-0">
             {/* Paths Section */}
             <div className="space-y-4">
               <h3 className="text-sm font-medium text-muted-foreground">Paths</h3>
@@ -177,6 +193,127 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               </div>
             </div>
 
+            <Separator />
+
+            {/* Diagnostics Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-muted-foreground">Diagnostics</h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={runDiagnostics}
+                  disabled={isDiagnosticsLoading}
+                >
+                  {isDiagnosticsLoading ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Bug className="h-4 w-4 mr-2" />
+                  )}
+                  Run Diagnostics
+                </Button>
+              </div>
+
+              {diagnostics && (
+                <div className="space-y-3 text-sm">
+                  {/* Claude Binary Status */}
+                  <div className="rounded-md border p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      {diagnostics.claude.executable ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-500" />
+                      )}
+                      <span className="font-medium">Claude CLI</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <p>Resolved: <code>{diagnostics.claude.resolvedPath}</code></p>
+                      {diagnostics.claude.version && (
+                        <p>Version: {diagnostics.claude.version}</p>
+                      )}
+                      {diagnostics.claude.error && (
+                        <p className="text-red-500">Error: {diagnostics.claude.error}</p>
+                      )}
+                    </div>
+                    {/* Search paths that exist */}
+                    <details className="text-xs">
+                      <summary className="cursor-pointer text-muted-foreground">
+                        Search paths ({diagnostics.claude.searchPaths.filter(p => p.exists).length} found)
+                      </summary>
+                      <ul className="mt-1 space-y-0.5 pl-4">
+                        {diagnostics.claude.searchPaths.map((p) => (
+                          <li key={p.path} className={p.exists ? 'text-green-600' : 'text-muted-foreground/50'}>
+                            {p.exists ? '✓' : '✗'} {p.path}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  </div>
+
+                  {/* Config Status */}
+                  <div className="rounded-md border p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      {diagnostics.config.parseError && !diagnostics.config.parseError.includes('does not exist') ? (
+                        <XCircle className="h-4 w-4 text-red-500" />
+                      ) : diagnostics.config.exists ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4 text-yellow-500" />
+                      )}
+                      <span className="font-medium">Config File</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <p>Path: <code>{diagnostics.config.path ?? 'N/A'}</code></p>
+                      <p>Exists: {diagnostics.config.exists ? 'Yes' : 'No (using defaults)'}</p>
+                      {diagnostics.config.parseError && !diagnostics.config.parseError.includes('does not exist') && (
+                        <p className="text-red-500">Error: {diagnostics.config.parseError}</p>
+                      )}
+                      {diagnostics.config.parsed && (
+                        <details>
+                          <summary className="cursor-pointer">Parsed values</summary>
+                          <pre className="mt-1 p-2 bg-muted rounded text-[10px] overflow-auto">
+                            {JSON.stringify(diagnostics.config.parsed, null, 2)}
+                          </pre>
+                        </details>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* File Access */}
+                  <div className="rounded-md border p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      {diagnostics.fileAccess.every(f => f.readable) ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4 text-yellow-500" />
+                      )}
+                      <span className="font-medium">File Access</span>
+                    </div>
+                    <ul className="text-xs space-y-1">
+                      {diagnostics.fileAccess.map((f) => (
+                        <li key={f.path} className="flex items-start gap-2">
+                          {f.readable ? (
+                            <span className="text-green-500">✓</span>
+                          ) : (
+                            <span className="text-red-500">✗</span>
+                          )}
+                          <span>
+                            <span className="text-muted-foreground">{f.description}:</span>{' '}
+                            <code className="text-[10px]">{f.path}</code>
+                            {f.error && <span className="text-red-500 block">{f.error}</span>}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Full diagnostics logged to console (Cmd+Option+I)
+                  </p>
+                </div>
+              )}
+            </div>
+
             {error && (
               <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
                 {error}
@@ -191,7 +328,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
           </div>
         )}
 
-        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between flex-shrink-0">
           <Button
             variant="ghost"
             size="sm"

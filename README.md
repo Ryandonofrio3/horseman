@@ -15,6 +15,22 @@ Native macOS GUI for Claude Code.
 2. Open the .dmg and drag Horseman to Applications
 3. **First launch:** Right-click the app → Open → Open (bypasses Gatekeeper warning for unsigned apps)
 
+## Permissions
+
+Horseman needs filesystem access to:
+- Run the `claude` CLI
+- Access your project directories
+- Read Claude transcripts from `~/.claude/projects`
+
+**Recommended:** Grant Full Disk Access to avoid repeated permission prompts:
+
+1. Open **System Settings** → **Privacy & Security** → **Full Disk Access**
+2. Click the `+` button
+3. Navigate to `/Applications` and select **Horseman**
+4. Restart Horseman
+
+Without this, macOS will prompt each time Horseman accesses protected directories (Desktop, Documents, Downloads).
+
 ## Build from Source
 
 ```bash
