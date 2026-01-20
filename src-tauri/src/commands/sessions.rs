@@ -171,3 +171,50 @@ pub fn parse_session_transcript(transcript_path: String) -> Result<TranscriptPar
 
     Ok(parse_transcript_with_subagents(Path::new(&transcript_path)))
 }
+
+/// Extract the compaction summary from a transcript (if present)
+/// Returns the LAST summary event in the file (most recent compaction).
+#[tauri::command]
+pub fn extract_transcript_summary(transcript_path: String) -> Result<Option<String>, String> {
+    debug_log!("SESSIONS", "Extracting summary from: {}", transcript_path);
+
+    let content = fs::read_to_string(&transcript_path)
+        .map_err(|e| format!("Failed to read transcript: {}", e))?;
+
+    // Find the LAST summary event (most recent compaction)
+    let mut last_summary: Option<String> = None;
+
+    for line in content.lines() {
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
+            if json.get("type").and_then(|v| v.as_str()) == Some("summary") {
+                if let Some(summary) = json.get("summary").and_then(|v| v.as_str()) {
+                    last_summary = Some(summary.to_string());
+                }
+            }
+        }
+    }
+
+    if let Some(ref summary) = last_summary {
+        debug_log!("SESSIONS", "Found summary: {}", summary);
+    } else {
+        debug_log!("SESSIONS", "No summary found in transcript");
+    }
+
+    Ok(last_summary)
+}
+
+/// Build the transcript path for a given session
+/// Format: ~/.claude/projects/{escaped-cwd}/{session-id}.jsonl
+#[tauri::command]
+pub fn get_transcript_path(working_directory: String, session_id: String) -> Result<String, String> {
+    let projects_dir = claude_projects_dir();
+
+    // Claude escapes paths by replacing "/" with "-" (keeping leading dash)
+    let encoded_dir = working_directory.replace('/', "-");
+
+    let transcript_path = projects_dir
+        .join(&encoded_dir)
+        .join(format!("{}.jsonl", session_id));
+
+    Ok(transcript_path.to_string_lossy().to_string())
+}

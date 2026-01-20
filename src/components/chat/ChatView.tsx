@@ -19,6 +19,7 @@ import { useConversationSearch } from '@/hooks/useConversationSearch'
 import { useSlashCommand } from '@/hooks/useSlashCommand'
 import { useSessionPermissions, useSessionQuestions, useSessionEvents, useAllTools } from '@/store/selectors'
 import { useStore } from '@/store'
+import { ipc } from '@/lib/ipc'
 import { MessageSquare, Loader2 } from 'lucide-react'
 import type { SlashCommand } from './SlashCommandMenu'
 import type { FileBlock, ParsedMessage, PendingFile, SessionEvent, SessionUsage, TodoItem } from '@/domain'
@@ -89,11 +90,13 @@ export function ChatView({
     type: 'compact' | 'clear' | null
     sessionId: string | null
     completed: boolean
+    summary?: string | null // Actual summary from transcript after /compact
   }
   const [commandState, setCommandState] = useState<CommandState>({
     type: null,
     sessionId: null,
     completed: false,
+    summary: null,
   })
 
   // Derive wasCleared from commandState
@@ -111,32 +114,52 @@ export function ChatView({
     }
   }, [hasMessages, wasCleared])
 
-  // Track when compact completes and log session events
+  // Track when compact completes, fetch summary, and log session events
   useEffect(() => {
-    if (!isRunning && commandState.sessionId === claudeSessionId && commandState.sessionId !== null && activeCommand === 'compact') {
-      setCommandState(prev => ({ ...prev, completed: true }))
+    if (!isRunning && commandState.sessionId === claudeSessionId && commandState.sessionId !== null && activeCommand === 'compact' && !commandState.completed) {
+      // Async function to fetch summary and log events
+      const handleCompactionComplete = async () => {
+        const timestamp = new Date().toISOString()
+        const status = slashError ? 'error' : 'completed'
 
-      // Log session events for the compaction
-      const timestamp = new Date().toISOString()
-      const status = slashError ? 'error' : 'completed'
-
-      appendSessionEvent(uiSessionId, {
-        type: 'slash',
-        timestamp,
-        command: 'compact',
-        status,
-      })
-
-      // If successful, also log the compaction point
-      if (!slashError) {
+        // Log slash command event
         appendSessionEvent(uiSessionId, {
-          type: 'compacted',
+          type: 'slash',
           timestamp,
-          summary: 'Context compacted', // TODO: Extract from transcript
+          command: 'compact',
+          status,
         })
+
+        // If successful, fetch the actual summary from transcript
+        if (!slashError) {
+          let summary = 'Context compacted' // Fallback
+          try {
+            const transcriptPath = await ipc.sessions.getTranscriptPath(workingDirectory, claudeSessionId)
+            const extractedSummary = await ipc.sessions.extractSummary(transcriptPath)
+            if (extractedSummary) {
+              summary = extractedSummary
+            }
+          } catch (err) {
+            console.warn('Failed to extract compaction summary:', err)
+          }
+
+          // Log the compaction point with actual summary
+          appendSessionEvent(uiSessionId, {
+            type: 'compacted',
+            timestamp,
+            summary,
+          })
+
+          // Update state with summary for UI display
+          setCommandState(prev => ({ ...prev, completed: true, summary }))
+        } else {
+          setCommandState(prev => ({ ...prev, completed: true }))
+        }
       }
+
+      handleCompactionComplete()
     }
-  }, [isRunning, commandState.sessionId, claudeSessionId, activeCommand, slashError, uiSessionId, appendSessionEvent])
+  }, [isRunning, commandState.sessionId, commandState.completed, claudeSessionId, activeCommand, slashError, uiSessionId, workingDirectory, appendSessionEvent])
 
   // Derive compact state (only for /compact, not /clear)
   const compactState: SlashCommandState | null = (() => {
@@ -179,11 +202,14 @@ export function ChatView({
     if (!claudeSessionId) return
 
     if (command.id === 'clear') {
-      // /clear: immediate - clear UI first, run PTY in background
+      // /clear: clear UI and reset Claude session so next message starts fresh
       clearMessages(uiSessionId)
       updateSession(uiSessionId, {
         currentTodos: [],
         usage: usage ? { ...usage, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 } : undefined,
+        // Clear claudeSessionId so next message starts a NEW Claude session
+        // instead of resuming (which would load the old transcript)
+        claudeSessionId: undefined,
       })
       setCommandState({ type: 'clear', sessionId: claudeSessionId, completed: true })
 
@@ -194,9 +220,7 @@ export function ChatView({
         command: 'clear',
         status: 'completed',
       })
-
-      // Fire and forget - PTY runs in background to sync with Claude
-      runSlashCommand(claudeSessionId, workingDirectory, '/clear', 'clear').catch(() => {})
+      // No PTY needed - we're starting a fresh Claude session, not resuming
     } else if (command.id === 'compact') {
       setCommandState({ type: 'compact', sessionId: claudeSessionId, completed: false })
       try {
@@ -345,7 +369,7 @@ export function ChatView({
         <div className="shrink-0 border-t border-border">
           <StatusLine loading={compactState === 'running'}>
             {compactState === 'running' && 'Context compacting...'}
-            {compactState === 'completed' && 'Context compacted'}
+            {compactState === 'completed' && (commandState.summary || 'Context compacted')}
             {compactState === 'error' && (slashError || 'Compact failed')}
           </StatusLine>
         </div>

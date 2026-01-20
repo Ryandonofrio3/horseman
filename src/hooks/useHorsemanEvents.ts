@@ -75,6 +75,17 @@ export function useHorsemanEvents({
       updateMessage(sessionId, lastAssistantMessageIdRef.current, { isStreaming: false })
     }
 
+    const recalculateSessionStatus = (sessionId: string) => {
+      const state = useStore.getState()
+      const hasPermissions = state.pendingPermissions.some(p => p.sessionId === sessionId)
+      const hasQuestions = state.pendingQuestions.some(q => q.sessionId === sessionId)
+
+      const status = hasQuestions ? 'waiting_question'
+        : hasPermissions ? 'waiting_permission'
+        : 'running'
+      updateSession(sessionId, { status })
+    }
+
     const setup = async () => {
       const unlistenFn = await listen<BackendEvent>('horseman-event', (event) => {
         if (!isMounted) return
@@ -233,18 +244,8 @@ export function useHorsemanEvents({
 
             removePendingPermission(payload.requestId)
 
-            // Recalculate status for the permission's session (not active session ref)
             if (permissionSessionId && permissionSessionId !== 'orphan') {
-              const newState = useStore.getState()
-              const hasPermissions = newState.pendingPermissions.some(p => p.sessionId === permissionSessionId)
-              const hasQuestions = newState.pendingQuestions.some(q => q.sessionId === permissionSessionId)
-              if (hasQuestions) {
-                updateSession(permissionSessionId, { status: 'waiting_question' })
-              } else if (hasPermissions) {
-                updateSession(permissionSessionId, { status: 'waiting_permission' })
-              } else {
-                updateSession(permissionSessionId, { status: 'running' })
-              }
+              recalculateSessionStatus(permissionSessionId)
             }
             break
           }
@@ -270,18 +271,8 @@ export function useHorsemanEvents({
 
             removePendingQuestion(payload.requestId)
 
-            // Recalculate status for the question's session (not active session ref)
             if (questionSessionId && questionSessionId !== 'orphan') {
-              const newState = useStore.getState()
-              const hasPermissions = newState.pendingPermissions.some(p => p.sessionId === questionSessionId)
-              const hasQuestions = newState.pendingQuestions.some(q => q.sessionId === questionSessionId)
-              if (hasQuestions) {
-                updateSession(questionSessionId, { status: 'waiting_question' })
-              } else if (hasPermissions) {
-                updateSession(questionSessionId, { status: 'waiting_permission' })
-              } else {
-                updateSession(questionSessionId, { status: 'running' })
-              }
+              recalculateSessionStatus(questionSessionId)
             }
             break
           }
@@ -337,7 +328,12 @@ export function useHorsemanEvents({
     enterPlanMode,
   ])
 
-  const startSession = useCallback(async (initialPrompt: string, fileBlocks?: FileBlock[]) => {
+  const startSession = useCallback(async (
+    initialPrompt: string,
+    fileBlocks?: FileBlock[],
+    /** Optional: what to send to Claude (if different from display text) */
+    sendContent?: string
+  ) => {
     if (!workingDirectory || !uiSessionId) {
       setError('No active session')
       return null
@@ -347,12 +343,14 @@ export function useHorsemanEvents({
       setError(null)
       lastAssistantMessageIdRef.current = null
 
+      // Display the original prompt in UI
       addMessage(uiSessionId, createUserMessage(initialPrompt, undefined, fileBlocks))
 
       const args: SpawnSessionArgs = {
         ui_session_id: uiSessionId,
         working_directory: workingDirectory,
-        initial_prompt: initialPrompt,
+        // Send modified content to Claude if provided, otherwise use display content
+        initial_prompt: sendContent ?? initialPrompt,
         resume_session: claudeSessionId,
         model,
       }
@@ -366,12 +364,17 @@ export function useHorsemanEvents({
     }
   }, [workingDirectory, uiSessionId, claudeSessionId, addMessage, model])
 
-  const sendMessage = useCallback(async (content: string, fileBlocks?: FileBlock[]) => {
+  const sendMessage = useCallback(async (
+    content: string,
+    fileBlocks?: FileBlock[],
+    /** Optional: what to send to Claude (if different from display text) */
+    sendContent?: string
+  ) => {
     const activeClaudeSession = activeClaudeSessionRef.current
     const currentUiSessionId = uiSessionIdRef.current
 
     if (!activeClaudeSession || !workingDirectory) {
-      return startSession(content, fileBlocks)
+      return startSession(content, fileBlocks, sendContent)
     }
 
     if (!currentUiSessionId) {
@@ -383,13 +386,15 @@ export function useHorsemanEvents({
       setIsStreaming(true)
       lastAssistantMessageIdRef.current = null
 
+      // Display the original content in UI
       addMessage(currentUiSessionId, createUserMessage(content, undefined, fileBlocks))
 
+      // Send modified content to Claude if provided, otherwise use display content
       await ipc.claude.sendMessage(
         currentUiSessionId,
         activeClaudeSession,
         workingDirectory,
-        content,
+        sendContent ?? content,
         model
       )
       return currentUiSessionId

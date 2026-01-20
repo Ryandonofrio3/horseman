@@ -715,6 +715,77 @@ tokens collapse to a single color even though highlight callbacks fire.
 
 ---
 
+## D018: /clear Starts Fresh Session (No Resume)
+
+**Decision:** After `/clear`, clear `claudeSessionId` so next message spawns a new Claude session instead of resuming.
+
+**Context:**
+`/clear` in CLI writes events to the transcript but doesn't delete history. When we `--resume {sessionId}`, Claude loads the ENTIRE transcript including everything before clear. The summary event should tell Claude to ignore old content, but it's still loaded into context.
+
+**Alternatives Considered:**
+- Run PTY `/clear` and keep resuming → Claude still sees old transcript
+- Wait for PTY to complete before allowing messages → Race condition, complexity
+- Parse transcript to find clear point → Over-engineered
+
+**Solution:**
+- Clear UI immediately
+- Clear `claudeSessionId` from session
+- Next message starts a new Claude session (no `--resume`)
+- No PTY needed - we're abandoning the old session entirely
+
+**Consequences:**
+- Clean context break - Claude truly forgets everything
+- New `claudeSessionId` assigned on next message
+- Old transcript orphaned (still on disk but not resumed)
+- Simple and reliable
+
+**Code Locations:**
+- `src/components/chat/ChatView.tsx` - handleSlashCommand /clear case
+
+---
+
+## D019: Compaction Summary Extraction and Context Injection
+
+**Decision:** Extract actual summary from transcript after `/compact`, inject into first message only.
+
+**Context:**
+After `/compact`, Claude writes a `{"type":"summary","summary":"..."}` event to the transcript. Previously Horseman showed a hardcoded "Context compacted" string. Claude had no awareness that compaction happened.
+
+**Summary Location:**
+Summary events can appear anywhere in the transcript (not just line 1). Multiple compactions = multiple summaries. Extract the LAST one (most recent).
+
+**Extraction:**
+- `extract_transcript_summary()` Rust command scans entire transcript
+- Returns last `type: "summary"` event's summary field
+- Called after `/compact` completes
+
+**Context Injection:**
+- Track `session.lastCompactionInjectedAt` timestamp
+- On message send, check for compaction newer than last injection
+- If found, prepend: `[Context: This conversation was compacted. Summary: {summary}]`
+- Mark as injected so subsequent messages don't repeat
+
+**Display vs Send:**
+- User message bubble shows original text (no injection visible)
+- Claude receives text with context prefix
+- `sendMessage(displayText, fileBlocks, sendText)` signature
+
+**Consequences:**
+- StatusLine shows actual summary from Claude
+- User sees clean message bubble
+- Claude receives compaction context on first post-compact message
+- Proper context continuity after compaction
+
+**Code Locations:**
+- `src-tauri/src/commands/sessions.rs` - extract_transcript_summary(), get_transcript_path()
+- `src/lib/ipc.ts` - IPC wrappers
+- `src/components/chat/ChatView.tsx` - summary fetch and display
+- `src/hooks/useHorsemanEvents.ts` - sendMessage with displayText/sendText
+- `src/App.tsx` - handleSendMessage context injection
+- `src/domain/session.ts` - lastCompactionInjectedAt field
+
+---
+
 ## Adding New Decisions
 
 When making architectural decisions, document them here:

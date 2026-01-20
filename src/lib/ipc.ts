@@ -89,6 +89,10 @@ export const ipc = {
       invoke<string>('read_session_transcript', { transcriptPath }),
     parseTranscript: (transcriptPath: string) =>
       invoke<TranscriptParseResult>('parse_session_transcript', { transcriptPath }),
+    extractSummary: (transcriptPath: string) =>
+      invoke<string | null>('extract_transcript_summary', { transcriptPath }),
+    getTranscriptPath: (workingDirectory: string, sessionId: string) =>
+      invoke<string>('get_transcript_path', { workingDirectory, sessionId }),
   },
   permissions: {
     respond: (

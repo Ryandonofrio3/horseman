@@ -46,4 +46,6 @@ export interface Session {
   usage?: SessionUsage
   hasPendingQuestion?: boolean
   events?: SessionEvent[]
+  /** Timestamp of the last compaction event for which we injected context */
+  lastCompactionInjectedAt?: string
 }

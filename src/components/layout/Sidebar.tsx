@@ -468,7 +468,7 @@ export function Sidebar({
   return (
     <div className="flex h-full flex-col bg-background overflow-hidden">
       {/* Header with drag region for window */}
-      <div className="flex items-center justify-between p-3 pt-8 border-b border-border shrink-0">
+      <div className="flex items-center justify-between p-3 pt-6 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-primary" />
           <h2 className="font-semibold text-sm">Horseman</h2>

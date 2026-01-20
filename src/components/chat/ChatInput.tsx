@@ -180,6 +180,16 @@ function ChatInputInner({
   }, [controller.textInput, menu.triggerIndex, onSlashCommand, closeMenu])
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // ⌘K - Clear input (works anytime in chat input)
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault()
+      controller.textInput.setInput('')
+      setPendingFiles([])
+      setHistoryIndex(-1)
+      setLocalDraft('')
+      return
+    }
+
     // Menu navigation takes priority
     if (menu.type) {
       if (e.key === 'ArrowDown') {
@@ -209,6 +219,13 @@ function ChatInputInner({
           if (selected) handleSelectSlashCommand(selected)
         }
       }
+      return
+    }
+
+    // Esc - Stop generation (when working and no menu open)
+    if (e.key === 'Escape' && isWorking) {
+      e.preventDefault()
+      onStop()
       return
     }
 
@@ -248,7 +265,7 @@ function ChatInputInner({
       }
       return
     }
-  }, [menu.type, fileCount, slashCommandCount, navigateMenu, closeMenu, handleSelectFile, handleSelectSlashCommand, selectedFileRef, selectedSlashCommandRef, controller.textInput, userMessages, historyIndex, localDraft])
+  }, [menu.type, fileCount, slashCommandCount, navigateMenu, closeMenu, handleSelectFile, handleSelectSlashCommand, selectedFileRef, selectedSlashCommandRef, controller.textInput, userMessages, historyIndex, localDraft, isWorking, onStop, setPendingFiles])
 
   const handleChange = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
     const textarea = e.currentTarget

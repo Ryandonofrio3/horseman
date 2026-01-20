@@ -8,6 +8,7 @@ import {
   useActiveSessionId,
   useHasRunningTools,
   useSessionMessages,
+  useSessionEvents,
   useSessions,
 } from '@/store/selectors'
 import { ipc, DiscoveredSession, TranscriptMessage } from '@/lib/ipc'
@@ -64,6 +65,7 @@ function App() {
   const [loadingDiscovered, setLoadingDiscovered] = useState(true)
 
   const activeSession = useActiveSession()
+  const sessionEvents = useSessionEvents(activeSessionId)
 
   const normalizeTranscriptMessage = useCallback(
     (message: TranscriptMessage): Message => ({
@@ -112,26 +114,10 @@ function App() {
     loadSessions()
   }, [])
 
-  // Keyboard shortcut: Shift+Tab or Alt+M to cycle permission mode
+  // Tab management
+  const openTabIds = useStore((s) => s.openTabIds)
+  const closeTab = useStore((s) => s.closeTab)
   const cyclePermissionMode = useStore((s) => s.cyclePermissionMode)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Shift+Tab to cycle modes
-      if (e.shiftKey && e.key === 'Tab') {
-        e.preventDefault()
-        cyclePermissionMode()
-        return
-      }
-      // Alt+M fallback
-      if (e.altKey && e.key === 'm') {
-        e.preventDefault()
-        cyclePermissionMode()
-        return
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [cyclePermissionMode])
 
   // Load transcript for a session
   const loadTranscriptForSession = useCallback(async (
@@ -234,6 +220,80 @@ function App() {
     setActiveSession(newSession.id)
   }, [activeSession, addSession, setActiveSession, handleNewSession])
 
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Shift+Tab to cycle permission modes (works everywhere)
+      if (e.shiftKey && e.key === 'Tab') {
+        e.preventDefault()
+        cyclePermissionMode()
+        return
+      }
+
+      // Alt+M fallback for permission mode
+      if (e.altKey && e.key === 'm') {
+        e.preventDefault()
+        cyclePermissionMode()
+        return
+      }
+
+      // Cmd/Ctrl shortcuts
+      if (e.metaKey || e.ctrlKey) {
+        // ⌘N - New session (folder picker)
+        if (e.key === 'n') {
+          e.preventDefault()
+          handleNewSession()
+          return
+        }
+
+        // ⌘T - New tab (same directory)
+        if (e.key === 't') {
+          e.preventDefault()
+          handleNewTabInSameDirectory()
+          return
+        }
+
+        // ⌘W - Close current tab
+        if (e.key === 'w' && activeSessionId) {
+          e.preventDefault()
+          closeTab(activeSessionId)
+          return
+        }
+
+        // ⌘1-9 - Switch to tab by index
+        const digit = parseInt(e.key)
+        if (digit >= 1 && digit <= 9 && openTabIds.length > 0) {
+          e.preventDefault()
+          const tabIndex = digit - 1
+          if (tabIndex < openTabIds.length) {
+            setActiveSession(openTabIds[tabIndex])
+          }
+          return
+        }
+
+        // ⌘[ - Previous tab
+        if (e.key === '[' && openTabIds.length > 1 && activeSessionId) {
+          e.preventDefault()
+          const currentIndex = openTabIds.indexOf(activeSessionId)
+          const prevIndex = currentIndex <= 0 ? openTabIds.length - 1 : currentIndex - 1
+          setActiveSession(openTabIds[prevIndex])
+          return
+        }
+
+        // ⌘] - Next tab
+        if (e.key === ']' && openTabIds.length > 1 && activeSessionId) {
+          e.preventDefault()
+          const currentIndex = openTabIds.indexOf(activeSessionId)
+          const nextIndex = currentIndex >= openTabIds.length - 1 ? 0 : currentIndex + 1
+          setActiveSession(openTabIds[nextIndex])
+          return
+        }
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [cyclePermissionMode, handleNewSession, handleNewTabInSameDirectory, activeSessionId, openTabIds, closeTab, setActiveSession])
+
   // Select existing session
   const handleSelectSession = useCallback(async (id: string) => {
     setActiveSession(id)
@@ -295,9 +355,28 @@ function App() {
       updateSession(activeSession.id, { name: newName })
     }
 
-    // Send message - the hook handles adding to store and new session vs resume
-    await sendMessage(text, fileBlocks)
-  }, [activeSession, activeSessionId, sendMessage, updateSession, hasMessages])
+    // Check for compaction context to inject (first message only after compaction)
+    let sendText: string | undefined
+    const lastCompaction = sessionEvents
+      .filter((e): e is Extract<typeof e, { type: 'compacted' }> => e.type === 'compacted')
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]
+
+    if (lastCompaction) {
+      const lastInjected = activeSession.lastCompactionInjectedAt
+      const compactionTime = new Date(lastCompaction.timestamp).getTime()
+      const injectedTime = lastInjected ? new Date(lastInjected).getTime() : 0
+
+      // If there's a compaction newer than last injection, inject context (send only, not display)
+      if (compactionTime > injectedTime) {
+        sendText = `[Context: This conversation was compacted. Summary: ${lastCompaction.summary}]\n\n${text}`
+        // Mark as injected so we don't inject again
+        updateSession(activeSession.id, { lastCompactionInjectedAt: lastCompaction.timestamp })
+      }
+    }
+
+    // Send message - display original text, optionally send modified text to Claude
+    await sendMessage(text, fileBlocks, sendText)
+  }, [activeSession, activeSessionId, sendMessage, updateSession, hasMessages, sessionEvents])
 
   // Stop Claude
   const handleStop = useCallback(async () => {
