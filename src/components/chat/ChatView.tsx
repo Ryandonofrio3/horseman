@@ -215,7 +215,19 @@ export function ChatView({
 
   // Get permissions and questions scoped to this session
   const pendingPermissions = useSessionPermissions(uiSessionId)
-  const pendingQuestions = useSessionQuestions(uiSessionId)
+  // Questions: match by toolUseId to tools in this session (MCP caches session ID at spawn, so sessionId field is unreliable)
+  const allPendingQuestions = useStore((s) => s.pendingQuestions)
+  const toolsById = useStore((s) => s.sessions[uiSessionId]?.toolsById)
+  const pendingQuestions = useMemo(() => {
+    // Match questions to this session by finding if toolUseId exists in toolsById
+    return allPendingQuestions.filter((q) => {
+      // If sessionId matches, include it
+      if (q.sessionId === uiSessionId) return true
+      // If sessionId is "orphan", match by toolUseId to tools in this session
+      if (q.sessionId === 'orphan' && toolsById?.[q.toolUseId]) return true
+      return false
+    })
+  }, [allPendingQuestions, uiSessionId, toolsById])
   const nextPermission = pendingPermissions[0] ?? null
 
   // Get compaction events for rendering dividers in message list
@@ -291,10 +303,14 @@ export function ChatView({
                   queueTotal={pendingPermissions.length}
                 />
               )}
-              {/* Inline question requests */}
-              {pendingQuestions.map((question) => (
-                <AskUserQuestionCard key={question.requestId} question={question} />
-              ))}
+              {/* Inline question requests - show one at a time like permissions */}
+              {pendingQuestions[0] && (
+                <AskUserQuestionCard
+                  key={pendingQuestions[0].requestId}
+                  question={pendingQuestions[0]}
+                  queueTotal={pendingQuestions.length}
+                />
+              )}
               {/* Inline plan approval */}
               <PlanOverlay />
             </ConversationContent>

@@ -354,6 +354,59 @@ Verify session isolation:
 
 If new sessions show `Some(...)`, the ref sync is broken.
 
+### AskUserQuestion System
+
+**How it works:**
+
+1. Claude calls `AskUserQuestion` tool with questions array
+2. Claude emits `assistant` event with `tool_use` block → creates tool in `toolsById` with `id = tool_use_id`
+3. Claude calls MCP permission prompt → `horseman-mcp` POSTs to Tauri HTTP server
+4. Tauri parses questions from `tool_input.questions`, emits `question.requested` event
+5. Frontend adds to `pendingQuestions` store, `AskUserQuestionCard` renders
+6. User answers → IPC call to `respond_permission` with answers
+7. MCP returns `{ behavior: "allow", updatedInput: { ...input, answers } }` to Claude
+8. Tauri emits `question.resolved` → frontend removes from store
+
+**Key files:**
+- `src/components/permissions/AskUserQuestionCard.tsx` - UI component
+- `src/components/chat/ChatView.tsx` - renders card, filters by session
+- `src-tauri/src/hooks/server.rs` - `handle_ask_user_question()` parses and emits
+- `horseman-mcp/src/main.rs` - forwards to Tauri, returns answers to Claude
+
+**MCP Session ID Bug:**
+
+Claude Code caches MCP server processes. `HORSEMAN_UI_SESSION_ID` env var is set at spawn time, but resumed sessions reuse the old MCP server with stale env vars → questions arrive with `sessionId: "orphan"`.
+
+**Fix**: Match questions by `toolUseId` to tools in session, not just `sessionId`:
+```ts
+const pendingQuestions = useMemo(() => {
+  return allPendingQuestions.filter((q) => {
+    if (q.sessionId === uiSessionId) return true
+    // Fallback: match orphan questions by toolUseId to tools in this session
+    if (q.sessionId === 'orphan' && toolsById?.[q.toolUseId]) return true
+    return false
+  })
+}, [allPendingQuestions, uiSessionId, toolsById])
+```
+
+**Why toolUseId fallback works**: The `assistant` event with `tool_use` block arrives BEFORE the MCP question request. This creates the tool in `toolsById`. The MCP question has the same `toolUseId`, so we can match it to the correct session.
+
+**Timeout handling:**
+
+Questions have 170s timeout (MCP times out at 175s). When timer hits 0:
+1. Remove from store immediately (don't wait for IPC)
+2. Try to send deny response (may fail if backend already timed out)
+3. Show "Dismiss (Expired)" button if question is stuck
+
+**Queue behavior:**
+
+Like permissions, questions show one at a time with queue indicator "(1 of N)".
+
+**Debugging:**
+1. Console `[QUESTION]` logs - verify `questionsCount` > 0 when event arrives
+2. Console `[AskUserQuestionCard]` logs - verify questions array populated
+3. If card shows but no content - `question.questions` is empty (parse issue in Rust)
+
 ---
 
 ## Known Limitations

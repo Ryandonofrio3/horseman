@@ -9,6 +9,7 @@ import { ipc } from '@/lib/ipc'
 
 interface AskUserQuestionCardProps {
   question: PendingQuestion
+  queueTotal?: number
 }
 
 interface FormState {
@@ -49,8 +50,22 @@ function formReducer(state: FormState, action: FormAction): FormState {
   }
 }
 
-export function AskUserQuestionCard({ question }: AskUserQuestionCardProps) {
+export function AskUserQuestionCard({ question, queueTotal = 1 }: AskUserQuestionCardProps) {
   const removePendingQuestion = useStore((s) => s.removePendingQuestion)
+
+  // Debug: Log if questions array is empty or malformed
+  useEffect(() => {
+    if (!question.questions || question.questions.length === 0) {
+      console.error('[AskUserQuestionCard] Empty questions array!', {
+        requestId: question.requestId,
+        sessionId: question.sessionId,
+        toolUseId: question.toolUseId,
+        questionsRaw: question.questions,
+      })
+    } else {
+      console.log('[AskUserQuestionCard] Rendering', question.questions.length, 'questions')
+    }
+  }, [question])
 
   // Form state via reducer
   // For single select: { questionIndex: optionLabel }
@@ -77,13 +92,15 @@ export function AskUserQuestionCard({ question }: AskUserQuestionCardProps) {
   }, [question.requestId])
 
   const handleTimeout = useCallback(async () => {
+    // Always remove from store first - the backend request may have already timed out
+    removePendingQuestion(question.requestId)
     try {
       await ipc.permissions.respond(question.requestId, false, {
         message: 'Timed out waiting for answer',
       })
-      removePendingQuestion(question.requestId)
     } catch (err) {
-      console.error('Failed to timeout question:', err)
+      // Expected if backend already timed out - question is already removed
+      console.log('[AskUserQuestionCard] Timeout response failed (likely already expired):', err)
     }
   }, [question.requestId, removePendingQuestion])
 
@@ -256,6 +273,9 @@ export function AskUserQuestionCard({ question }: AskUserQuestionCardProps) {
         <div className="flex items-center gap-2 text-pink-600 dark:text-pink-400">
           <MessageCircleQuestion className="h-4 w-4 shrink-0" />
           <span className="font-medium">Claude is asking</span>
+          {queueTotal > 1 && (
+            <span className="text-xs text-muted-foreground">(1 of {queueTotal})</span>
+          )}
           {timerUrgent && (
             <span className={cn(
               "ml-auto text-xs font-mono tabular-nums",
@@ -268,7 +288,11 @@ export function AskUserQuestionCard({ question }: AskUserQuestionCardProps) {
 
         {/* Questions */}
         <div className="space-y-4">
-          {question.questions.map((q: Question, qIndex: number) => (
+          {(!question.questions || question.questions.length === 0) ? (
+            <p className="text-sm text-muted-foreground italic">
+              No questions received. Check console for details.
+            </p>
+          ) : question.questions.map((q: Question, qIndex: number) => (
             <div
               key={qIndex}
               data-question-index={qIndex}
@@ -369,22 +393,33 @@ export function AskUserQuestionCard({ question }: AskUserQuestionCardProps) {
           ))}
         </div>
 
-        {/* Submit button */}
-        <Button
-          onClick={handleSubmit}
-          disabled={!isValid || isSubmitting}
-          size="sm"
-          className="w-full"
-        >
-          {isSubmitting ? (
-            'Sending...'
-          ) : (
-            <>
-              <Send className="h-3.5 w-3.5 mr-1.5" />
-              Send Answer
-            </>
-          )}
-        </Button>
+        {/* Submit button or Dismiss if expired */}
+        {secondsLeft <= 0 ? (
+          <Button
+            onClick={() => removePendingQuestion(question.requestId)}
+            variant="outline"
+            size="sm"
+            className="w-full"
+          >
+            Dismiss (Expired)
+          </Button>
+        ) : (
+          <Button
+            onClick={handleSubmit}
+            disabled={!isValid || isSubmitting}
+            size="sm"
+            className="w-full"
+          >
+            {isSubmitting ? (
+              'Sending...'
+            ) : (
+              <>
+                <Send className="h-3.5 w-3.5 mr-1.5" />
+                Send Answer
+              </>
+            )}
+          </Button>
+        )}
       </div>
     </div>
   )
