@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Minimize2, Trash2, HelpCircle, Copy } from 'lucide-react'
+import { Minimize2, Trash2, HelpCircle, Copy, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface SlashCommand {
@@ -34,6 +34,12 @@ const SLASH_COMMANDS: SlashCommand[] = [
     name: '/export',
     description: 'Copy conversation to clipboard',
     icon: <Copy className="h-4 w-4" />,
+  },
+  {
+    id: 'status',
+    name: '/status',
+    description: 'Show session and account info',
+    icon: <Info className="h-4 w-4" />,
   },
 ]
 

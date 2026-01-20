@@ -4,6 +4,7 @@ import { ipc, SpawnSessionArgs } from '@/lib/ipc'
 import { useStore } from '@/store'
 import { createUserMessage } from '@/lib/parseClaudeEvents'
 import type { BackendEvent, BackendMessage, FileBlock, Message } from '@/domain'
+import type { SessionState } from '@/store/types'
 
 interface UseHorsemanEventsOptions {
   uiSessionId: string | null
@@ -136,7 +137,22 @@ export function useHorsemanEvents({
             break
           case 'tool.started': {
             console.log('[TOOL.STARTED]', payload.tool.name, payload.tool.id)
-            updateToolFields(payload.uiSessionId, payload.tool.id, payload.tool)
+
+            // Find correct session - MCP may have stale session ID
+            let targetSession = payload.uiSessionId
+            const state = useStore.getState()
+            if (!state.sessions[targetSession]?.toolsById[payload.tool.id]) {
+              // Tool not in expected session, search all sessions
+              for (const [sessionId, sessionState] of Object.entries(state.sessions)) {
+                if (sessionState.toolsById[payload.tool.id]) {
+                  console.log('[TOOL.STARTED] Fallback: found tool in session', sessionId, 'instead of', payload.uiSessionId)
+                  targetSession = sessionId
+                  break
+                }
+              }
+            }
+
+            updateToolFields(targetSession, payload.tool.id, payload.tool)
 
             // EnterPlanMode - Claude enters planning mode, sync UI badge
             if (payload.tool.name === 'EnterPlanMode') {
@@ -147,32 +163,71 @@ export function useHorsemanEvents({
             // ExitPlanMode - Claude finished planning, show plan overlay for approval
             if (payload.tool.name === 'ExitPlanMode') {
               console.log('[PLAN] ExitPlanMode detected, entering plan mode')
-              const state = useStore.getState()
-              const sessionState = state.sessions[payload.uiSessionId]
+              const planState = useStore.getState()
+              const sessionState = planState.sessions[targetSession]
               const messages = sessionState?.messages || []
               // Get the last assistant message content as plan
               const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
               const planContent = lastAssistant?.text || ''
               console.log('[PLAN] Plan content length:', planContent.length, 'chars')
-              enterPlanMode(payload.uiSessionId, payload.tool.id, planContent)
+              enterPlanMode(targetSession, payload.tool.id, planContent)
               console.log('[PLAN] enterPlanMode called, activePlan should be set')
             }
             break
           }
-          case 'tool.updated':
-            updateToolFields(payload.uiSessionId, payload.toolId, payload.update)
+          case 'tool.updated': {
+            // Find correct session - MCP may have stale session ID
+            let targetSession = payload.uiSessionId
+            const state = useStore.getState()
+            if (!state.sessions[targetSession]?.toolsById[payload.toolId]) {
+              for (const [sessionId, sessionState] of Object.entries(state.sessions)) {
+                if (sessionState.toolsById[payload.toolId]) {
+                  console.log('[TOOL.UPDATED] Fallback: found tool in session', sessionId)
+                  targetSession = sessionId
+                  break
+                }
+              }
+            }
+            updateToolFields(targetSession, payload.toolId, payload.update)
             break
-          case 'tool.completed':
-            updateToolOutput(payload.uiSessionId, '', payload.toolId, payload.output)
+          }
+          case 'tool.completed': {
+            // Find correct session - MCP may have stale session ID
+            let targetSession = payload.uiSessionId
+            const state = useStore.getState()
+            if (!state.sessions[targetSession]?.toolsById[payload.toolId]) {
+              for (const [sessionId, sessionState] of Object.entries(state.sessions)) {
+                if (sessionState.toolsById[payload.toolId]) {
+                  console.log('[TOOL.COMPLETED] Fallback: found tool in session', sessionId)
+                  targetSession = sessionId
+                  break
+                }
+              }
+            }
+            updateToolOutput(targetSession, '', payload.toolId, payload.output)
             break
-          case 'tool.error':
-            updateToolFields(payload.uiSessionId, payload.toolId, {
+          }
+          case 'tool.error': {
+            // Find correct session - MCP may have stale session ID
+            let targetSession = payload.uiSessionId
+            const state = useStore.getState()
+            if (!state.sessions[targetSession]?.toolsById[payload.toolId]) {
+              for (const [sessionId, sessionState] of Object.entries(state.sessions)) {
+                if (sessionState.toolsById[payload.toolId]) {
+                  console.log('[TOOL.ERROR] Fallback: found tool in session', sessionId)
+                  targetSession = sessionId
+                  break
+                }
+              }
+            }
+            updateToolFields(targetSession, payload.toolId, {
               status: 'error',
               error: payload.error,
               output: payload.error,
               endedAt: new Date().toISOString(),
             })
             break
+          }
           case 'todos.updated':
             updateSession(payload.uiSessionId, { currentTodos: payload.todos })
             break

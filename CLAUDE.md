@@ -3,10 +3,9 @@
 ## Read Order (Mandatory)
 
 1. **This file** - Architecture + onboarding
-2. **RULES.md** - Critical patterns that will break things if ignored
-3. **DECISIONS.md** - *Why* things are the way they are (read before "fixing" anything)
-4. **ARCHITECTURE_REFACTOR.md** - Refactor status and remaining work
-5. **DIARY.md** - Historical context (some may be outdated)
+2. **claude_docs/RULES.md** - Critical patterns that will break things if ignored
+3. **claude_docs/DECISIONS.md** - *Why* things are the way they are (read before "fixing" anything)
+4. **claude_docs/DIARY.md** - Historical context (some may be outdated)
 
 If something looks wrong or you want to change a core pattern, **ASK the user first**.
 

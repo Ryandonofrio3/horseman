@@ -33,6 +33,23 @@ export interface HorsemanConfig {
   contextWindow: number | null
 }
 
+export interface StatusInfo {
+  version: string | null
+  subscription_type: string | null
+  mcp_servers: McpServer[]
+  memory_files: MemoryFile[]
+}
+
+export interface McpServer {
+  name: string
+  connected: boolean
+}
+
+export interface MemoryFile {
+  path: string
+  scope: string
+}
+
 export type TranscriptMessage = Omit<Message, 'timestamp'> & { timestamp: string }
 
 export interface PendingQuestionFromTranscript {
@@ -145,5 +162,9 @@ export const ipc = {
       invoke<HorsemanConfig>('update_horseman_config', { config }),
     getPath: () =>
       invoke<string | null>('get_config_path'),
+  },
+  status: {
+    get: (workingDirectory: string) =>
+      invoke<StatusInfo>('get_status_info', { workingDirectory }),
   },
 }

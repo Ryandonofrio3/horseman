@@ -15,6 +15,7 @@ import { PermissionCard } from '@/components/permissions/PermissionCard'
 import { AskUserQuestionCard } from '@/components/permissions/AskUserQuestionCard'
 import { PlanOverlay } from './PlanOverlay'
 import { HelpModal } from '@/components/HelpModal'
+import { StatusModal } from '@/components/StatusModal'
 import { useConversationSearch } from '@/hooks/useConversationSearch'
 import { useSlashCommand } from '@/hooks/useSlashCommand'
 import { useSessionPermissions, useSessionQuestions, useSessionEvents, useAllTools } from '@/store/selectors'
@@ -71,6 +72,9 @@ export function ChatView({
   // Help modal state
   const [showHelpModal, setShowHelpModal] = useState(false)
 
+  // Status modal state
+  const [showStatusModal, setShowStatusModal] = useState(false)
+
   // Export status (brief feedback)
   const [exportStatus, setExportStatus] = useState<'idle' | 'copied'>('idle')
 
@@ -81,6 +85,9 @@ export function ChatView({
 
   // All tools from store (includes subagent tools that aren't in any message)
   const allTools = useAllTools(uiSessionId)
+
+  // Model for status display
+  const model = useStore((s) => s.model)
 
   // Slash command handling (for /compact only - /clear is immediate)
   const { isRunning, activeCommand, error: slashError, runCommand: runSlashCommand } = useSlashCommand()
@@ -177,6 +184,12 @@ export function ChatView({
     // /help doesn't need a session
     if (command.id === 'help') {
       setShowHelpModal(true)
+      return
+    }
+
+    // /status shows status modal
+    if (command.id === 'status') {
+      setShowStatusModal(true)
       return
     }
 
@@ -418,6 +431,16 @@ export function ChatView({
 
       {/* Help modal */}
       <HelpModal open={showHelpModal} onOpenChange={setShowHelpModal} />
+
+      {/* Status modal */}
+      <StatusModal
+        open={showStatusModal}
+        onOpenChange={setShowStatusModal}
+        sessionId={uiSessionId}
+        claudeSessionId={claudeSessionId}
+        workingDirectory={workingDirectory}
+        model={model}
+      />
     </div>
   )
 }
