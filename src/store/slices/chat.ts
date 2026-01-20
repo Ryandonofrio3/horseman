@@ -38,9 +38,19 @@ export const createChatSlice: StateCreator<AppStore, [], [], ChatSlice> = (set, 
         }
       }
 
+      // Update lastActiveAt to the message timestamp for sidebar sorting
+      const messageTime = message.timestamp instanceof Date
+        ? message.timestamp.toISOString()
+        : message.timestamp
+      const nextSession = {
+        ...sessionState.session,
+        lastActiveAt: messageTime,
+      }
+
       const nextSessions = { ...state.sessions }
       nextSessions[sessionId] = {
         ...sessionState,
+        session: nextSession,
         messages: nextMessages,
         messageIndexById: nextMessageIndexById,
         toolsById: nextToolsById,

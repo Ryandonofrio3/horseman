@@ -181,15 +181,14 @@ export function AskUserQuestionCard({ question, queueTotal = 1 }: AskUserQuestio
       })
 
       // Send answers back to Claude via MCP
+      // Don't remove from store here - let question.resolved event handle it
+      // This ensures status recalculation happens in one place (useHorsemanEvents)
       await ipc.questions.respond(question.requestId, formattedAnswers)
-
-      // Remove from pending
-      removePendingQuestion(question.requestId)
     } catch (error) {
       console.error('Failed to submit answer:', error)
       dispatch({ type: 'SET_SUBMITTING', value: false })
     }
-  }, [question, answers, otherInputs, isSubmitting, removePendingQuestion])
+  }, [question, answers, otherInputs, isSubmitting])
 
   // Check if at least one answer is provided for each question
   const isValid = useMemo(

@@ -6,6 +6,7 @@ import { useStore } from '@/store'
 import {
   useActiveSession,
   useActiveSessionId,
+  useHasRunningTools,
   useSessionMessages,
   useSessions,
 } from '@/store/selectors'
@@ -91,6 +92,10 @@ function App() {
     workingDirectory: activeSession?.workingDirectory || null,
     onClaudeSessionIdObtained: handleClaudeSessionIdObtained,
   })
+
+  // Check if any tools are running (covers gap between message and tool completion)
+  const hasRunningTools = useHasRunningTools(activeSessionId)
+  const isWorking = isStreaming || hasRunningTools
 
   // Load discovered sessions from ~/.claude/projects/ on startup
   useEffect(() => {
@@ -330,7 +335,7 @@ function App() {
               claudeSessionId={activeSession.claudeSessionId}
               workingDirectory={activeSession.workingDirectory}
               messages={messages}
-              isWorking={isStreaming}
+              isWorking={isWorking}
               error={error}
               currentTodos={activeSession.currentTodos}
               usage={activeSession.usage}

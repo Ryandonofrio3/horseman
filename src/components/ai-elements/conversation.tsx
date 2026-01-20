@@ -4,14 +4,14 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ArrowDownIcon } from "lucide-react";
 import type { ComponentProps } from "react";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 
 export type ConversationProps = ComponentProps<typeof StickToBottom>;
 
 export const Conversation = ({ className, ...props }: ConversationProps) => (
   <StickToBottom
-    className={cn("relative overflow-y-auto", className)}
+    className={cn("relative overflow-hidden", className)}
     initial="smooth"
     resize="smooth"
     role="log"
@@ -74,16 +74,39 @@ export const ConversationScrollButton = ({
   className,
   ...props
 }: ConversationScrollButtonProps) => {
-  const { isAtBottom, scrollToBottom } = useStickToBottomContext();
+  const { scrollRef, contentRef, scrollToBottom } = useStickToBottomContext();
+  const [isScrolledToBottom, setIsScrolledToBottom] = useState(true);
 
   const handleScrollToBottom = useCallback(() => {
     scrollToBottom();
   }, [scrollToBottom]);
 
-  if (isAtBottom) return null;
+  useEffect(() => {
+    const scrollEl = scrollRef.current;
+    const contentEl = contentRef.current;
+    if (!scrollEl || !contentEl) return;
+
+    const updateIsAtBottom = () => {
+      const remaining =
+        scrollEl.scrollHeight - scrollEl.clientHeight - scrollEl.scrollTop;
+      setIsScrolledToBottom(remaining <= 4);
+    };
+
+    updateIsAtBottom();
+    scrollEl.addEventListener("scroll", updateIsAtBottom, { passive: true });
+    const resizeObserver = new ResizeObserver(updateIsAtBottom);
+    resizeObserver.observe(contentEl);
+
+    return () => {
+      scrollEl.removeEventListener("scroll", updateIsAtBottom);
+      resizeObserver.disconnect();
+    };
+  }, [scrollRef, contentRef]);
+
+  if (isScrolledToBottom) return null;
 
   return (
-    <div className="sticky bottom-4 flex justify-center pointer-events-none">
+    <div className="pointer-events-none absolute bottom-4 left-0 right-0 flex justify-center">
       <Button
         className={cn(
           "z-10 rounded-full shadow-md pointer-events-auto",

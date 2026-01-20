@@ -214,19 +214,24 @@ export function useHorsemanEvents({
             break
           }
           case 'permission.resolved': {
-            removePendingPermission(payload.requestId)
-            // Recalculate status - check if other permissions/questions pending
+            // Get permission's sessionId BEFORE removing
             const state = useStore.getState()
-            const sessionId = uiSessionIdRef.current
-            if (sessionId) {
-              const hasPermissions = state.pendingPermissions.some(p => p.sessionId === sessionId)
-              const hasQuestions = state.pendingQuestions.some(q => q.sessionId === sessionId)
+            const permission = state.pendingPermissions.find(p => p.requestId === payload.requestId)
+            const permissionSessionId = permission?.sessionId
+
+            removePendingPermission(payload.requestId)
+
+            // Recalculate status for the permission's session (not active session ref)
+            if (permissionSessionId && permissionSessionId !== 'orphan') {
+              const newState = useStore.getState()
+              const hasPermissions = newState.pendingPermissions.some(p => p.sessionId === permissionSessionId)
+              const hasQuestions = newState.pendingQuestions.some(q => q.sessionId === permissionSessionId)
               if (hasQuestions) {
-                updateSession(sessionId, { status: 'waiting_question' })
+                updateSession(permissionSessionId, { status: 'waiting_question' })
               } else if (hasPermissions) {
-                updateSession(sessionId, { status: 'waiting_permission' })
+                updateSession(permissionSessionId, { status: 'waiting_permission' })
               } else {
-                updateSession(sessionId, { status: 'running' })
+                updateSession(permissionSessionId, { status: 'running' })
               }
             }
             break
@@ -246,19 +251,24 @@ export function useHorsemanEvents({
             break
           }
           case 'question.resolved': {
-            removePendingQuestion(payload.requestId)
-            // Recalculate status
+            // Get question's sessionId BEFORE removing
             const state = useStore.getState()
-            const sessionId = uiSessionIdRef.current
-            if (sessionId) {
-              const hasPermissions = state.pendingPermissions.some(p => p.sessionId === sessionId)
-              const hasQuestions = state.pendingQuestions.some(q => q.sessionId === sessionId)
+            const question = state.pendingQuestions.find(q => q.requestId === payload.requestId)
+            const questionSessionId = question?.sessionId
+
+            removePendingQuestion(payload.requestId)
+
+            // Recalculate status for the question's session (not active session ref)
+            if (questionSessionId && questionSessionId !== 'orphan') {
+              const newState = useStore.getState()
+              const hasPermissions = newState.pendingPermissions.some(p => p.sessionId === questionSessionId)
+              const hasQuestions = newState.pendingQuestions.some(q => q.sessionId === questionSessionId)
               if (hasQuestions) {
-                updateSession(sessionId, { status: 'waiting_question' })
+                updateSession(questionSessionId, { status: 'waiting_question' })
               } else if (hasPermissions) {
-                updateSession(sessionId, { status: 'waiting_permission' })
+                updateSession(questionSessionId, { status: 'waiting_permission' })
               } else {
-                updateSession(sessionId, { status: 'running' })
+                updateSession(questionSessionId, { status: 'running' })
               }
             }
             break

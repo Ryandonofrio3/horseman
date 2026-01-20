@@ -109,6 +109,17 @@ export function useAllTools(sessionId: string | null) {
   }, [toolsById])
 }
 
+/** Returns true if any tools are currently running (status === 'running') */
+export function useHasRunningTools(sessionId: string | null) {
+  const toolsById = useStore((s) =>
+    sessionId ? s.sessions[sessionId]?.toolsById : undefined
+  )
+  return useMemo(() => {
+    if (!toolsById) return false
+    return Object.values(toolsById).some((t) => t.status === 'running')
+  }, [toolsById])
+}
+
 /** Returns the draft text for a session */
 export function useDraft(sessionId: string | null) {
   return useStore((s) => (sessionId ? s.drafts[sessionId] ?? '' : ''))
