@@ -182,6 +182,8 @@ pub enum BackendEvent {
         tool_name: String,
         #[serde(rename = "toolInput")]
         tool_input: serde_json::Value,
+        #[serde(rename = "uiSessionId")]
+        ui_session_id: Option<String>,
     },
     #[serde(rename = "permission.resolved")]
     PermissionResolved {

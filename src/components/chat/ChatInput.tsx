@@ -10,6 +10,7 @@ import { FileAutocomplete } from './FileAutocomplete'
 import { SlashCommandMenu, type SlashCommand } from './SlashCommandMenu'
 import { ChatInputFooter } from './ChatInputFooter'
 import { useInputMenu } from '@/hooks/useInputMenu'
+import { extractFileRefs } from './InlineFileRef'
 import type { SessionUsage, FileBlock, PendingFile } from '@/domain'
 
 // Thresholds for converting paste to file pill
@@ -74,10 +75,10 @@ function ChatInputInner({
     let finalMessage = ''
     const fileBlocks: FileBlock[] = []
 
+    // Only process non-reference files (pasted content)
+    // Reference files are already inline as @path in the text
     for (const file of pendingFiles) {
-      if (file.isReference && file.path) {
-        finalMessage += `@${file.path}\n\n`
-      } else {
+      if (!file.isReference) {
         finalMessage += file.content + '\n\n'
         fileBlocks.push({
           id: file.id,
@@ -103,9 +104,13 @@ function ChatInputInner({
     const before = value.slice(0, menu.triggerIndex)
     const after = value.slice(cursorPos)
 
-    controller.textInput.setInput((before + after).trim())
+    // Keep @path inline, add space after
+    const suffix = isDir ? '/' : ''
+    const newText = `${before}@${filePath}${suffix} ${after.trimStart()}`
+    controller.textInput.setInput(newText)
     closeMenu()
 
+    // Also add preview pill above
     setPendingFiles(prev => [...prev, {
       id: nanoid(),
       content: '',
@@ -116,7 +121,12 @@ function ChatInputInner({
       isDirectory: isDir,
     }])
 
-    setTimeout(() => textarea?.focus(), 0)
+    // Position cursor after the space
+    const newCursorPos = before.length + 1 + filePath.length + suffix.length + 1
+    setTimeout(() => {
+      textarea?.focus()
+      textarea?.setSelectionRange(newCursorPos, newCursorPos)
+    }, 0)
   }, [controller.textInput, menu.triggerIndex, setPendingFiles, closeMenu])
 
   const handleSelectSlashCommand = useCallback((command: SlashCommand) => {
@@ -166,8 +176,19 @@ function ChatInputInner({
 
   const handleChange = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
     const textarea = e.currentTarget
-    checkForTriggers(textarea.value, textarea.selectionStart, textarea.getBoundingClientRect())
-  }, [checkForTriggers])
+    const text = textarea.value
+    checkForTriggers(text, textarea.selectionStart, textarea.getBoundingClientRect())
+
+    // Sync pills with text - remove reference pills whose @path is no longer in text
+    const { filePaths } = extractFileRefs(text)
+    // Normalize paths (strip trailing slash for directory comparison)
+    const pathsInText = new Set(filePaths.map(p => p.replace(/\/$/, '')))
+    setPendingFiles(prev => {
+      const filtered = prev.filter(f => !f.isReference || (f.path && pathsInText.has(f.path)))
+      // Only update if something changed (avoid unnecessary re-renders)
+      return filtered.length === prev.length ? prev : filtered
+    })
+  }, [checkForTriggers, setPendingFiles])
 
   const folderName = workingDirectory?.split('/').pop() || 'No folder'
 

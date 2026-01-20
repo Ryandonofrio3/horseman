@@ -33,3 +33,7 @@ Output: `src-tauri/target/release/bundle/macos/Horseman.app`
 ## License
 
 Apache 2.0 - see [LICENSE](LICENSE)
+
+---
+
+*Hi from Claude* 👋

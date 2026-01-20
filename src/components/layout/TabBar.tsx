@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo } from 'react'
 import { useStore } from '@/store'
-import { useActiveSessionId, useSessions } from '@/store/selectors'
+import { useActiveSessionId, useSessions, needsAttention } from '@/store/selectors'
 import { Button } from '@/components/ui/button'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import { X, Plus, PanelLeft } from 'lucide-react'
@@ -44,7 +44,13 @@ const TabItem = memo(function TabItem({ session, isActive, onSelect, onClose }: 
       onClick={handleSelect}
       onKeyDown={handleKeyDown}
     >
-      <span className={cn('w-2 h-2 rounded-full shrink-0', STATUS_COLORS[session.status])} />
+      <span
+        className={cn(
+          'w-2 h-2 rounded-full shrink-0',
+          STATUS_COLORS[session.status],
+          needsAttention(session.status) && 'animate-pulse'
+        )}
+      />
       <span className="truncate flex-1">{session.name}</span>
       <button
         className="opacity-0 group-hover:opacity-100 hover:bg-muted rounded p-0.5 transition-opacity shrink-0"

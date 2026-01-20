@@ -93,7 +93,7 @@ async fn handle_permission(
     }
 
     // Emit event to frontend
-    debug_log!("MCP", "Emitting permission request: {} for {}", request_id, input.tool_name);
+    debug_log!("MCP", "Emitting permission request: {} for {} (session: {:?})", request_id, input.tool_name, input.ui_session_id);
 
     let _ = state.app.emit(
         "horseman-event",
@@ -101,6 +101,7 @@ async fn handle_permission(
             request_id: request_id.clone(),
             tool_name: input.tool_name.clone(),
             tool_input: input.tool_input.clone(),
+            ui_session_id: input.ui_session_id.clone(),
         },
     );
 
@@ -181,9 +182,11 @@ async fn handle_ask_user_question(
     }
 
     // Emit question event to frontend
+    // Use session ID from MCP env var, or "orphan" if not available
+    let session_id = input.ui_session_id.clone().unwrap_or_else(|| "orphan".to_string());
     let pending_question = PendingQuestion {
         request_id: request_id.clone(),
-        session_id: "mcp".to_string(),
+        session_id,
         tool_use_id: input.tool_use_id.clone(),
         questions,
         timestamp: chrono::Utc::now().timestamp_millis(),

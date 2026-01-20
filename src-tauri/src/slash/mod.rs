@@ -136,7 +136,7 @@ impl SlashManager {
         let mut buf = [0u8; 4096];
         let mut accumulated_output = String::new();
         let start_time = Instant::now();
-        let timeout = Duration::from_secs(60);
+        let timeout = Duration::from_secs(120);
         let mut detection_method: Option<String> = None;
 
         loop {
@@ -156,7 +156,7 @@ impl SlashManager {
                         "horseman-event",
                         BackendEvent::SlashError {
                             command_id: command_id.clone(),
-                            message: "Slash command timed out after 60s".to_string(),
+                            message: "Slash command timed out after 120s".to_string(),
                         },
                     );
                     break;

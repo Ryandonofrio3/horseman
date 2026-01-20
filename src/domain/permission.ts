@@ -3,6 +3,6 @@ export interface PendingPermission {
   toolName: string
   toolInput: Record<string, unknown>
   toolUseId?: string
-  sessionId?: string
+  sessionId: string
   timestamp: number
 }

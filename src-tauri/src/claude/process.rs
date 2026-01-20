@@ -133,7 +133,7 @@ impl ClaudeManager {
         ];
 
         // Write MCP config and add flags if we have the binary
-        let mcp_config_path = self.setup_mcp_config(&working_directory)?;
+        let mcp_config_path = self.setup_mcp_config(&working_directory, &ui_session_id)?;
         if let Some(config_path) = mcp_config_path {
             args.push("--mcp-config".to_string());
             args.push(config_path);
@@ -314,7 +314,7 @@ impl ClaudeManager {
 
     /// Setup MCP config for permission handling
     /// Returns the config file path if successful, None if MCP not available
-    fn setup_mcp_config(&self, working_directory: &str) -> Result<Option<String>, String> {
+    fn setup_mcp_config(&self, working_directory: &str, ui_session_id: &str) -> Result<Option<String>, String> {
         let port = match self.callback_port {
             Some(p) => p,
             None => {
@@ -341,6 +341,7 @@ impl ClaudeManager {
             Path::new(working_directory),
             port,
             &mcp_path,
+            ui_session_id,
         )?;
 
         Ok(Some(config_path))

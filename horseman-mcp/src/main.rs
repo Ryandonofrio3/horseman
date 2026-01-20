@@ -29,6 +29,7 @@ struct PermissionCallbackRequest {
     tool_use_id: String,
     tool_name: String,
     tool_input: serde_json::Value,
+    ui_session_id: Option<String>,
 }
 
 /// Response from Tauri backend
@@ -62,6 +63,8 @@ pub struct RequestPermissionInput {
 pub struct HorsemanMcp {
     /// Port where Tauri's callback server is running
     callback_port: u16,
+    /// UI session ID from environment (for session tracking)
+    ui_session_id: Option<String>,
     /// HTTP client for making callbacks
     client: Arc<reqwest::Client>,
     /// Tool router
@@ -70,8 +73,10 @@ pub struct HorsemanMcp {
 
 impl HorsemanMcp {
     pub fn new(callback_port: u16) -> Self {
+        let ui_session_id = env::var("HORSEMAN_UI_SESSION_ID").ok();
         Self {
             callback_port,
+            ui_session_id,
             client: Arc::new(reqwest::Client::new()),
             tool_router: Self::tool_router(),
         }
@@ -90,6 +95,7 @@ impl HorsemanMcp {
             tool_use_id,
             tool_name,
             tool_input,
+            ui_session_id: self.ui_session_id.clone(),
         };
 
         debug!("Sending permission request to Tauri: {:?}", request);
@@ -223,7 +229,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .parse()
         .map_err(|_| "HORSEMAN_CALLBACK_PORT must be a valid port number")?;
 
-    info!("Starting Horseman MCP server, callback port: {}", callback_port);
+    // Log session ID for debugging
+    let ui_session_id = env::var("HORSEMAN_UI_SESSION_ID").ok();
+    info!(
+        "Starting Horseman MCP server, callback port: {}, ui_session_id: {:?}",
+        callback_port, ui_session_id
+    );
 
     // Create and serve the MCP server
     let server = HorsemanMcp::new(callback_port);

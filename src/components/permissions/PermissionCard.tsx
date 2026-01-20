@@ -35,14 +35,11 @@ function getToolVerb(toolName: string): string {
 export function PermissionCard({ permission, queueTotal }: PermissionCardProps) {
   const removePendingPermission = useStore((s) => s.removePendingPermission)
   const appendSessionEvent = useStore((s) => s.appendSessionEvent)
-  const activeSessionId = useStore((s) => s.activeSessionId)
   const [isProcessing, setIsProcessing] = useState(false)
   const [secondsLeft, setSecondsLeft] = useState(170)
 
-  // Get session ID for event logging - use permission's sessionId if valid, else active session
-  const eventSessionId = (permission.sessionId && permission.sessionId !== 'mcp')
-    ? permission.sessionId
-    : activeSessionId
+  // sessionId is now required - always use permission's session
+  const eventSessionId = permission.sessionId
 
   const handleDeny = useCallback(async (message?: string) => {
     if (isProcessing) return

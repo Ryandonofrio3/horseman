@@ -7,6 +7,7 @@ pub struct PermissionRequest {
     pub tool_use_id: String,
     pub tool_name: String,
     pub tool_input: serde_json::Value,
+    pub ui_session_id: Option<String>,
 }
 
 /// Permission response to MCP server

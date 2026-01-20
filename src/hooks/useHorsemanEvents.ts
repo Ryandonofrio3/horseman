@@ -82,7 +82,10 @@ export function useHorsemanEvents({
 
         switch (payload.type) {
           case 'session.started': {
-            updateSession(payload.uiSessionId, { claudeSessionId: payload.claudeSessionId })
+            updateSession(payload.uiSessionId, {
+              claudeSessionId: payload.claudeSessionId,
+              status: 'running',
+            })
             if (payload.uiSessionId === uiSessionIdRef.current) {
               activeClaudeSessionRef.current = payload.claudeSessionId
               onClaudeSessionIdObtainedRef.current?.(payload.claudeSessionId)
@@ -92,6 +95,9 @@ export function useHorsemanEvents({
             break
           }
           case 'session.ended': {
+            updateSession(payload.uiSessionId, {
+              status: payload.error ? 'error' : 'idle',
+            })
             if (payload.uiSessionId === uiSessionIdRef.current) {
               setIsStreaming(false)
               markStreamingComplete(uiSessionIdRef.current)
@@ -104,6 +110,7 @@ export function useHorsemanEvents({
           case 'message.assistant': {
             const message = normalizeMessage(payload.message)
             addMessage(payload.uiSessionId, message)
+            updateSession(payload.uiSessionId, { status: 'running' })
             if (payload.uiSessionId === uiSessionIdRef.current) {
               lastAssistantMessageIdRef.current = message.id
               setIsStreaming(true)
@@ -158,6 +165,7 @@ export function useHorsemanEvents({
           case 'usage.updated': {
             updateSession(payload.uiSessionId, {
               usage: payload.usage,
+              status: 'idle',
               ...(payload.usage.cost != null ? { totalCostUsd: payload.usage.cost } : {}),
             })
             if (payload.uiSessionId === uiSessionIdRef.current) {
@@ -190,32 +198,65 @@ export function useHorsemanEvents({
               break
             }
 
-            // Normal/Plan mode - show permission UI
-            // Tag with active UI session (MCP doesn't know session context)
+            // Use session ID from event (passed through MCP chain), fallback to orphan
+            const permSessionId = payload.uiSessionId || 'orphan'
+
             addPendingPermission({
               requestId: payload.requestId,
-              sessionId: uiSessionIdRef.current || 'mcp',
+              sessionId: permSessionId,
               toolName: payload.toolName,
               toolInput: payload.toolInput,
               timestamp: Date.now(),
             })
-            break
-          }
-          case 'permission.resolved':
-            removePendingPermission(payload.requestId)
-            break
-          case 'question.requested': {
-            // Tag with active UI session (MCP doesn't know session context)
-            const taggedQuestion = {
-              ...payload.question,
-              sessionId: uiSessionIdRef.current || 'mcp',
+            if (permSessionId !== 'orphan') {
+              updateSession(permSessionId, { status: 'waiting_permission' })
             }
-            addPendingQuestion(taggedQuestion)
             break
           }
-          case 'question.resolved':
-            removePendingQuestion(payload.requestId)
+          case 'permission.resolved': {
+            removePendingPermission(payload.requestId)
+            // Recalculate status - check if other permissions/questions pending
+            const state = useStore.getState()
+            const sessionId = uiSessionIdRef.current
+            if (sessionId) {
+              const hasPermissions = state.pendingPermissions.some(p => p.sessionId === sessionId)
+              const hasQuestions = state.pendingQuestions.some(q => q.sessionId === sessionId)
+              if (hasQuestions) {
+                updateSession(sessionId, { status: 'waiting_question' })
+              } else if (hasPermissions) {
+                updateSession(sessionId, { status: 'waiting_permission' })
+              } else {
+                updateSession(sessionId, { status: 'running' })
+              }
+            }
             break
+          }
+          case 'question.requested': {
+            // Session ID is now set correctly by Rust via MCP chain
+            addPendingQuestion(payload.question)
+            if (payload.question.sessionId !== 'orphan') {
+              updateSession(payload.question.sessionId, { status: 'waiting_question' })
+            }
+            break
+          }
+          case 'question.resolved': {
+            removePendingQuestion(payload.requestId)
+            // Recalculate status
+            const state = useStore.getState()
+            const sessionId = uiSessionIdRef.current
+            if (sessionId) {
+              const hasPermissions = state.pendingPermissions.some(p => p.sessionId === sessionId)
+              const hasQuestions = state.pendingQuestions.some(q => q.sessionId === sessionId)
+              if (hasQuestions) {
+                updateSession(sessionId, { status: 'waiting_question' })
+              } else if (hasPermissions) {
+                updateSession(sessionId, { status: 'waiting_permission' })
+              } else {
+                updateSession(sessionId, { status: 'running' })
+              }
+            }
+            break
+          }
           case 'slash.started':
             startSlashCommand(payload.commandId)
             break

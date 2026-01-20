@@ -1,0 +1,20 @@
+{
+  "anthropic_style": {
+    "exit_code": 1,
+    "events": 0,
+    "stderr": "Error: Expected message type 'user' or 'control', got 'undefined'\n"
+  },
+  "simple_content": {
+    "exit_code": 1,
+    "events": 0,
+    "stderr": "Error: Expected message type 'user' or 'control', got 'undefined'\n"
+  },
+  "file_reference": {
+    "exit_code": 0,
+    "events": 19,
+    "stderr": ""
+  },
+  "image_flag": {
+    "available": false
+  }
+}

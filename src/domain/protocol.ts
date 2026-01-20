@@ -17,7 +17,7 @@ export type BackendEvent =
   | { type: 'tool.error'; uiSessionId: string; toolId: string; error: string }
   | { type: 'todos.updated'; uiSessionId: string; todos: TodoItem[] }
   | { type: 'usage.updated'; uiSessionId: string; usage: SessionUsage }
-  | { type: 'permission.requested'; requestId: string; toolName: string; toolInput: Record<string, unknown> }
+  | { type: 'permission.requested'; requestId: string; toolName: string; toolInput: Record<string, unknown>; uiSessionId?: string }
   | { type: 'permission.resolved'; requestId: string }
   | { type: 'question.requested'; requestId: string; question: PendingQuestion }
   | { type: 'question.resolved'; requestId: string }

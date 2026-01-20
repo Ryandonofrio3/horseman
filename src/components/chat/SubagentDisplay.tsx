@@ -46,27 +46,6 @@ function SubagentDisplayInner({ tool, childTools = [], allTools = [] }: Subagent
     setIsOpen(true)
   }, [hasAwaitingChildQuestion])
 
-  // Compute elapsed time lazily - updates when tool.startedAt/endedAt change
-  // For running tasks, shows snapshot (doesn't tick every second)
-  const elapsedMs = useMemo(() => {
-    if (!tool.startedAt) return null
-    const start = Date.parse(tool.startedAt)
-    const end = tool.endedAt ? Date.parse(tool.endedAt) : Date.now()
-    return Math.max(0, end - start)
-  }, [tool.startedAt, tool.endedAt])
-
-  const formatElapsed = (ms: number) => {
-    const totalSeconds = Math.floor(ms / 1000)
-    const hours = Math.floor(totalSeconds / 3600)
-    const minutes = Math.floor((totalSeconds % 3600) / 60)
-    const seconds = totalSeconds % 60
-    if (hours > 0) {
-      return `${hours}h ${minutes.toString().padStart(2, '0')}m`
-    }
-    return `${minutes}m ${seconds.toString().padStart(2, '0')}s`
-  }
-
-  const elapsedLabel = elapsedMs !== null ? formatElapsed(elapsedMs) : null
 
   // Only show chevron if there are child tools or output
   const hasExpandableContent = childTools.length > 0 || tool.output
@@ -126,13 +105,6 @@ function SubagentDisplayInner({ tool, childTools = [], allTools = [] }: Subagent
           {toolCount > 0 && (
             <span className="text-xs text-muted-foreground shrink-0">
               ({toolCount} {toolCount === 1 ? 'tool' : 'tools'})
-            </span>
-          )}
-
-          {/* Elapsed time */}
-          {elapsedLabel && (
-            <span className="text-xs text-muted-foreground shrink-0">
-              {elapsedLabel}
             </span>
           )}
 

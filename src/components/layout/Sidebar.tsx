@@ -18,7 +18,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { useStore } from '@/store'
+import { needsAttention } from '@/store/selectors'
+import { STATUS_COLORS } from '@/constants'
 import type { SortOrder } from '@/store/types'
+import type { SessionStatus } from '@/domain'
 import { Plus, Settings, FolderOpen, Loader2, MessageSquare, ChevronRight, ChevronDown, Folder, PanelLeftClose, Pencil, Trash2, ArrowUpDown, EyeOff, Eye } from 'lucide-react'
 import type { DiscoveredSession } from '@/lib/ipc'
 import type { Session } from '@/domain'
@@ -34,6 +37,7 @@ interface SessionItemProps {
     name: string
     fullName: string // untruncated name for editing
     date: string
+    status: SessionStatus
     isDiscovered: boolean
     discoveredSession?: DiscoveredSession
   }
@@ -111,7 +115,16 @@ const SessionItem = memo(function SessionItem({
               : 'hover:bg-muted'
           )}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            {session.status !== 'idle' && (
+              <span
+                className={cn(
+                  'w-2 h-2 rounded-full shrink-0',
+                  STATUS_COLORS[session.status],
+                  needsAttention(session.status) && 'animate-pulse'
+                )}
+              />
+            )}
             {isEditing ? (
               <input
                 ref={inputRef}
@@ -120,11 +133,11 @@ const SessionItem = memo(function SessionItem({
                 onChange={(e) => onEditingNameChange(e.target.value)}
                 onBlur={onEditingSave}
                 onKeyDown={handleKeyDown}
-                className="font-medium flex-1 bg-transparent border-b border-primary outline-none"
+                className="font-medium flex-1 min-w-0 bg-transparent border-b border-primary outline-none"
                 onClick={(e) => e.stopPropagation()}
               />
             ) : (
-              <span className="font-medium truncate flex-1">{session.name}</span>
+              <span className="font-medium truncate flex-1 min-w-0">{session.name}</span>
             )}
             {session.isDiscovered && (
               <Badge className="shrink-0 text-[10px] px-1.5 py-0 h-4 bg-amber-500/15 text-amber-600 dark:text-amber-400 border-0">CLI</Badge>
@@ -180,16 +193,17 @@ interface ProjectGroup {
     name: string
     fullName: string
     date: string
+    status: SessionStatus
     isDiscovered: boolean
     discoveredSession?: DiscoveredSession
   }>
 }
 
 // Status priority for sorting (lower = higher priority)
-const STATUS_PRIORITY: Record<string, number> = {
+const STATUS_PRIORITY: Record<SessionStatus, number> = {
   running: 0,
-  waiting_approval: 1,
   waiting_permission: 1,
+  waiting_question: 1,
   error: 2,
   idle: 3,
 }
@@ -202,7 +216,7 @@ function groupByProject(
   sortOrder: SortOrder
 ): { visible: ProjectGroup[]; hidden: ProjectGroup[] } {
   const groups = new Map<string, ProjectGroup>()
-  const sessionStatusMap = new Map<string, string>()
+  const sessionStatusMap = new Map<string, SessionStatus>()
 
   // Add local sessions
   for (const session of sessions) {
@@ -220,6 +234,7 @@ function groupByProject(
       name: truncateName(session.name),
       fullName: session.name,
       date: session.lastActiveAt,
+      status: session.status,
       isDiscovered: session.isDiscovered || false,
     })
   }
@@ -250,6 +265,7 @@ function groupByProject(
       name: truncateName(dsName),
       fullName: dsName,
       date: ds.modified_at,
+      status: 'idle',
       isDiscovered: true,
       discoveredSession: ds,
     })

@@ -1,7 +1,14 @@
 import { useMemo } from 'react'
 import { useStore } from './index'
 import { useShallow } from 'zustand/shallow'
-import type { ParsedMessage, PendingPermission, PendingQuestion, Session, SessionEvent, TodoItem, ToolCall } from '@/domain'
+import type { ParsedMessage, PendingPermission, PendingQuestion, Session, SessionEvent, SessionStatus, TodoItem, ToolCall } from '@/domain'
+
+/** Status values that require user attention */
+export const ATTENTION_STATUSES: SessionStatus[] = ['waiting_permission', 'waiting_question', 'error']
+
+export function needsAttention(status: SessionStatus): boolean {
+  return ATTENTION_STATUSES.includes(status)
+}
 
 const EMPTY_MESSAGES: ParsedMessage[] = []
 const EMPTY_SESSIONS: Session[] = []

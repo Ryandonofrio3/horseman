@@ -9,7 +9,12 @@ use std::path::Path;
 
 /// Write MCP server configuration to the working directory
 /// Creates mcp-config.json that Claude will use to spawn our MCP server
-pub fn write_mcp_config(working_dir: &Path, port: u16, mcp_binary_path: &str) -> Result<String, String> {
+pub fn write_mcp_config(
+    working_dir: &Path,
+    port: u16,
+    mcp_binary_path: &str,
+    ui_session_id: &str,
+) -> Result<String, String> {
     let config_path = working_dir.join(".horseman-mcp.json");
 
     let config = serde_json::json!({
@@ -18,7 +23,8 @@ pub fn write_mcp_config(working_dir: &Path, port: u16, mcp_binary_path: &str) ->
                 "command": mcp_binary_path,
                 "args": [],
                 "env": {
-                    "HORSEMAN_CALLBACK_PORT": port.to_string()
+                    "HORSEMAN_CALLBACK_PORT": port.to_string(),
+                    "HORSEMAN_UI_SESSION_ID": ui_session_id
                 }
             }
         }

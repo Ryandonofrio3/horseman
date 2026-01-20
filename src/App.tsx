@@ -325,6 +325,7 @@ function App() {
         main={
           activeSession ? (
             <ChatView
+              key={activeSession.id}
               uiSessionId={activeSession.id}
               claudeSessionId={activeSession.claudeSessionId}
               workingDirectory={activeSession.workingDirectory}
