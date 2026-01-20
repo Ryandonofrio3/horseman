@@ -108,3 +108,20 @@ export function useAllTools(sessionId: string | null) {
     return tools.length > 0 ? tools : EMPTY_TOOLS
   }, [toolsById])
 }
+
+/** Returns the draft text for a session */
+export function useDraft(sessionId: string | null) {
+  return useStore((s) => (sessionId ? s.drafts[sessionId] ?? '' : ''))
+}
+
+/** Returns user messages for input history navigation (most recent first) */
+export function useUserMessages(sessionId: string | null) {
+  const messages = useStore((s) =>
+    sessionId ? s.sessions[sessionId]?.messages ?? EMPTY_MESSAGES : EMPTY_MESSAGES
+  )
+  return useMemo(() => {
+    const userMsgs = messages.filter((m) => m.role === 'user')
+    // Return newest first for Up arrow navigation
+    return userMsgs.reverse()
+  }, [messages])
+}

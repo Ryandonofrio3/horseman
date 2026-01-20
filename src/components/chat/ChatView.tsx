@@ -14,6 +14,7 @@ import { ConversationSearch } from './ConversationSearch'
 import { PermissionCard } from '@/components/permissions/PermissionCard'
 import { AskUserQuestionCard } from '@/components/permissions/AskUserQuestionCard'
 import { PlanOverlay } from './PlanOverlay'
+import { HelpModal } from '@/components/HelpModal'
 import { useConversationSearch } from '@/hooks/useConversationSearch'
 import { useSlashCommand } from '@/hooks/useSlashCommand'
 import { useSessionPermissions, useSessionQuestions, useSessionEvents, useAllTools } from '@/store/selectors'
@@ -65,6 +66,12 @@ export function ChatView({
   // Pending files for @ references and pastes
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
   const hasPendingFiles = pendingFiles.length > 0
+
+  // Help modal state
+  const [showHelpModal, setShowHelpModal] = useState(false)
+
+  // Export status (brief feedback)
+  const [exportStatus, setExportStatus] = useState<'idle' | 'copied'>('idle')
 
   // Store actions for /clear and session events
   const clearMessages = useStore((s) => s.clearMessages)
@@ -144,6 +151,31 @@ export function ChatView({
   }, [])
 
   const handleSlashCommand = useCallback(async (command: SlashCommand) => {
+    // /help doesn't need a session
+    if (command.id === 'help') {
+      setShowHelpModal(true)
+      return
+    }
+
+    // /export doesn't need PTY - just format and copy
+    if (command.id === 'export') {
+      const markdown = messages.map((m) => {
+        const role = m.role === 'user' ? '**User**' : '**Assistant**'
+        return `${role}\n\n${m.text}`
+      }).join('\n\n---\n\n')
+
+      const header = `# Conversation Export\n\nWorking directory: ${workingDirectory}\nExported: ${new Date().toLocaleString()}\n\n---\n\n`
+
+      try {
+        await navigator.clipboard.writeText(header + markdown)
+        setExportStatus('copied')
+        setTimeout(() => setExportStatus('idle'), 2000)
+      } catch (err) {
+        console.error('Failed to copy to clipboard:', err)
+      }
+      return
+    }
+
     if (!claudeSessionId) return
 
     if (command.id === 'clear') {
@@ -179,11 +211,23 @@ export function ChatView({
     //     // Error will be captured by hook
     //   }
     }
-  }, [claudeSessionId, workingDirectory, runSlashCommand, clearMessages, updateSession, uiSessionId, usage, appendSessionEvent])
+  }, [claudeSessionId, workingDirectory, messages, runSlashCommand, clearMessages, updateSession, uiSessionId, usage, appendSessionEvent])
 
   // Get permissions and questions scoped to this session
   const pendingPermissions = useSessionPermissions(uiSessionId)
-  const pendingQuestions = useSessionQuestions(uiSessionId)
+  // Questions: match by toolUseId to tools in this session (MCP caches session ID at spawn, so sessionId field is unreliable)
+  const allPendingQuestions = useStore((s) => s.pendingQuestions)
+  const toolsById = useStore((s) => s.sessions[uiSessionId]?.toolsById)
+  const pendingQuestions = useMemo(() => {
+    // Match questions to this session by finding if toolUseId exists in toolsById
+    return allPendingQuestions.filter((q) => {
+      // If sessionId matches, include it
+      if (q.sessionId === uiSessionId) return true
+      // If sessionId is "orphan", match by toolUseId to tools in this session
+      if (q.sessionId === 'orphan' && toolsById?.[q.toolUseId]) return true
+      return false
+    })
+  }, [allPendingQuestions, uiSessionId, toolsById])
   const nextPermission = pendingPermissions[0] ?? null
 
   // Get compaction events for rendering dividers in message list
@@ -259,10 +303,14 @@ export function ChatView({
                   queueTotal={pendingPermissions.length}
                 />
               )}
-              {/* Inline question requests */}
-              {pendingQuestions.map((question) => (
-                <AskUserQuestionCard key={question.requestId} question={question} />
-              ))}
+              {/* Inline question requests - show one at a time like permissions */}
+              {pendingQuestions[0] && (
+                <AskUserQuestionCard
+                  key={pendingQuestions[0].requestId}
+                  question={pendingQuestions[0]}
+                  queueTotal={pendingQuestions.length}
+                />
+              )}
               {/* Inline plan approval */}
               <PlanOverlay />
             </ConversationContent>
@@ -322,6 +370,7 @@ export function ChatView({
       {/* Input area - fixed height */}
       <footer className="shrink-0 border-t border-border p-4">
         <ChatInput
+          sessionId={uiSessionId}
           workingDirectory={workingDirectory}
           isWorking={isWorking || (isRunning && activeCommand === 'compact')}
           usage={usage}
@@ -332,6 +381,16 @@ export function ChatView({
           onSlashCommand={handleSlashCommand}
         />
       </footer>
+
+      {/* Export status toast */}
+      {exportStatus === 'copied' && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-background/95 backdrop-blur border border-border rounded-lg shadow-lg px-4 py-2 z-50">
+          <span className="text-sm text-muted-foreground">Conversation copied to clipboard</span>
+        </div>
+      )}
+
+      {/* Help modal */}
+      <HelpModal open={showHelpModal} onOpenChange={setShowHelpModal} />
     </div>
   )
 }

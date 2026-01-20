@@ -1,4 +1,4 @@
-import { useCallback, useRef, type ChangeEvent, type ClipboardEvent, type KeyboardEvent } from 'react'
+import { useCallback, useRef, useState, useEffect, useMemo, type ChangeEvent, type ClipboardEvent, type KeyboardEvent } from 'react'
 import { nanoid } from 'nanoid'
 import {
   PromptInput,
@@ -11,6 +11,8 @@ import { SlashCommandMenu, type SlashCommand } from './SlashCommandMenu'
 import { ChatInputFooter } from './ChatInputFooter'
 import { useInputMenu } from '@/hooks/useInputMenu'
 import { extractFileRefs } from './InlineFileRef'
+import { useSessionMessages, useDraft } from '@/store/selectors'
+import { useStore } from '@/store'
 import type { SessionUsage, FileBlock, PendingFile } from '@/domain'
 
 // Thresholds for converting paste to file pill
@@ -18,6 +20,7 @@ const PASTE_LINE_THRESHOLD = 50
 const PASTE_CHAR_THRESHOLD = 5000
 
 interface ChatInputProps {
+  sessionId: string
   workingDirectory: string
   isWorking: boolean
   usage?: SessionUsage
@@ -29,6 +32,7 @@ interface ChatInputProps {
 }
 
 function ChatInputInner({
+  sessionId,
   workingDirectory,
   isWorking,
   usage,
@@ -40,6 +44,34 @@ function ChatInputInner({
 }: ChatInputProps) {
   const controller = usePromptInputController()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Input history from user messages
+  const messages = useSessionMessages(sessionId)
+  const userMessages = useMemo(
+    () => messages.filter((m) => m.role === 'user').map((m) => m.text),
+    [messages]
+  )
+  const [historyIndex, setHistoryIndex] = useState(-1) // -1 = current draft
+
+  // Store-backed draft (persists across tab switches)
+  const storedDraft = useDraft(sessionId)
+  const setStoredDraft = useStore((s) => s.setDraft)
+  const clearStoredDraft = useStore((s) => s.clearDraft)
+
+  // Local draft for history navigation (temporary during Up/Down browsing)
+  const [localDraft, setLocalDraft] = useState('')
+
+  // Restore draft when switching sessions
+  const prevSessionRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (sessionId !== prevSessionRef.current) {
+      // Session changed - restore stored draft
+      controller.textInput.setInput(storedDraft)
+      setHistoryIndex(-1)
+      setLocalDraft('')
+      prevSessionRef.current = sessionId
+    }
+  }, [sessionId, storedDraft, controller.textInput])
 
   const {
     menu,
@@ -93,7 +125,12 @@ function ChatInputInner({
     finalMessage += text
     if (!finalMessage.trim()) return
 
+    // Clear state and draft
     setPendingFiles([])
+    setHistoryIndex(-1)
+    setLocalDraft('')
+    clearStoredDraft(sessionId)
+
     await onSendMessage(finalMessage.trim(), fileBlocks.length > 0 ? fileBlocks : undefined)
   }
 
@@ -143,41 +180,91 @@ function ChatInputInner({
   }, [controller.textInput, menu.triggerIndex, onSlashCommand, closeMenu])
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!menu.type) return
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      navigateMenu('down')
-      return
-    }
-    if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      navigateMenu('up')
-      return
-    }
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      closeMenu()
-      return
-    }
-
-    const count = menu.type === '@' ? fileCount : slashCommandCount
-    if ((e.key === 'Enter' || e.key === 'Tab') && count > 0) {
-      e.preventDefault()
-      if (menu.type === '@') {
-        const selected = selectedFileRef.current
-        if (selected) handleSelectFile(selected.path, selected.is_dir)
-      } else {
-        const selected = selectedSlashCommandRef.current
-        if (selected) handleSelectSlashCommand(selected)
+    // Menu navigation takes priority
+    if (menu.type) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        navigateMenu('down')
+        return
       }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        navigateMenu('up')
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        closeMenu()
+        return
+      }
+
+      const count = menu.type === '@' ? fileCount : slashCommandCount
+      if ((e.key === 'Enter' || e.key === 'Tab') && count > 0) {
+        e.preventDefault()
+        if (menu.type === '@') {
+          const selected = selectedFileRef.current
+          if (selected) handleSelectFile(selected.path, selected.is_dir)
+        } else {
+          const selected = selectedSlashCommandRef.current
+          if (selected) handleSelectSlashCommand(selected)
+        }
+      }
+      return
     }
-  }, [menu.type, fileCount, slashCommandCount, navigateMenu, closeMenu, handleSelectFile, handleSelectSlashCommand, selectedFileRef, selectedSlashCommandRef])
+
+    // Input history navigation (only when menu is closed)
+    const text = controller.textInput.value
+    const cursorPos = textareaRef.current?.selectionStart ?? 0
+
+    // Up arrow - go to older message
+    if (e.key === 'ArrowUp' && userMessages.length > 0) {
+      // Only trigger if cursor at position 0 or input is empty
+      if (cursorPos === 0 || text === '') {
+        e.preventDefault()
+        if (historyIndex === -1) {
+          setLocalDraft(text) // Save current input before navigating
+        }
+        if (historyIndex < userMessages.length - 1) {
+          const newIndex = historyIndex + 1
+          setHistoryIndex(newIndex)
+          // Get message from newest to oldest
+          const historyText = userMessages[userMessages.length - 1 - newIndex]
+          controller.textInput.setInput(historyText)
+        }
+      }
+      return
+    }
+
+    // Down arrow - go to newer message or back to draft
+    if (e.key === 'ArrowDown' && historyIndex > -1) {
+      e.preventDefault()
+      const newIndex = historyIndex - 1
+      setHistoryIndex(newIndex)
+      if (newIndex === -1) {
+        controller.textInput.setInput(localDraft)
+      } else {
+        const historyText = userMessages[userMessages.length - 1 - newIndex]
+        controller.textInput.setInput(historyText)
+      }
+      return
+    }
+  }, [menu.type, fileCount, slashCommandCount, navigateMenu, closeMenu, handleSelectFile, handleSelectSlashCommand, selectedFileRef, selectedSlashCommandRef, controller.textInput, userMessages, historyIndex, localDraft])
 
   const handleChange = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
     const textarea = e.currentTarget
     const text = textarea.value
     checkForTriggers(text, textarea.selectionStart, textarea.getBoundingClientRect())
+
+    // Save draft to store (for persistence across tab switches)
+    // Only when not browsing history (historyIndex === -1)
+    if (historyIndex === -1) {
+      setStoredDraft(sessionId, text)
+    } else {
+      // User started typing while browsing history - exit history mode
+      setHistoryIndex(-1)
+      setLocalDraft('')
+      setStoredDraft(sessionId, text)
+    }
 
     // Sync pills with text - remove reference pills whose @path is no longer in text
     const { filePaths } = extractFileRefs(text)
@@ -188,7 +275,7 @@ function ChatInputInner({
       // Only update if something changed (avoid unnecessary re-renders)
       return filtered.length === prev.length ? prev : filtered
     })
-  }, [checkForTriggers, setPendingFiles])
+  }, [checkForTriggers, setPendingFiles, sessionId, setStoredDraft, historyIndex])
 
   const folderName = workingDirectory?.split('/').pop() || 'No folder'
 

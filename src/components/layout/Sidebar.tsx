@@ -540,22 +540,29 @@ export function Sidebar({
 
                   {/* Sessions in this project */}
                   {isExpanded && (
-                    <div className="ml-4 pl-2 border-l border-border/50">
-                      {group.sessions.map((session) => (
-                        <SessionItem
-                          key={session.id}
-                          session={session}
-                          isActive={session.id === activeSessionId}
-                          isEditing={session.id === editing?.sessionId}
-                          editingName={session.id === editing?.sessionId ? editing.name : ''}
-                          onSelect={onSelectSession}
-                          onSelectDiscovered={onSelectDiscoveredSession}
-                          onStartEdit={handleStartEdit}
-                          onEditingNameChange={handleEditingNameChange}
-                          onEditingSave={handleEditingSave}
-                          onEditingCancel={handleEditingCancel}
-                          onDelete={onDeleteSession}
-                        />
+                    <div className="ml-2 pl-2 border-l border-border/40">
+                      {group.sessions.map((session, idx) => (
+                        <div key={session.id} className="relative">
+                          {/* Horizontal connector line */}
+                          <div className="absolute left-0 top-1/2 w-2 h-px bg-border/40 -translate-x-2" />
+                          {/* Vertical line extension for non-last items */}
+                          {idx === group.sessions.length - 1 && (
+                            <div className="absolute left-0 top-1/2 bottom-0 w-px bg-background -translate-x-2" />
+                          )}
+                          <SessionItem
+                            session={session}
+                            isActive={session.id === activeSessionId}
+                            isEditing={session.id === editing?.sessionId}
+                            editingName={session.id === editing?.sessionId ? editing.name : ''}
+                            onSelect={onSelectSession}
+                            onSelectDiscovered={onSelectDiscoveredSession}
+                            onStartEdit={handleStartEdit}
+                            onEditingNameChange={handleEditingNameChange}
+                            onEditingSave={handleEditingSave}
+                            onEditingCancel={handleEditingCancel}
+                            onDelete={onDeleteSession}
+                          />
+                        </div>
                       ))}
                     </div>
                   )}

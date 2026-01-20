@@ -233,6 +233,12 @@ export function useHorsemanEvents({
           }
           case 'question.requested': {
             // Session ID is now set correctly by Rust via MCP chain
+            console.log('[QUESTION] Received question.requested', {
+              requestId: payload.question.requestId,
+              sessionId: payload.question.sessionId,
+              questionsCount: payload.question.questions?.length ?? 0,
+              questions: payload.question.questions,
+            })
             addPendingQuestion(payload.question)
             if (payload.question.sessionId !== 'orphan') {
               updateSession(payload.question.sessionId, { status: 'waiting_question' })

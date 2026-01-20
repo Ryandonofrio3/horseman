@@ -25,7 +25,7 @@ Tracking what Horseman can do vs the real Claude Code CLI.
 | **Screenshot paste** | ❌ | ✅ | macOS native |
 | Binary file references | ❌ | ✅ | PDFs, images in @include |
 | External editor (Ctrl+G) | ❌ | ✅ | Opens $EDITOR |
-| Input history (Up/Down) | ❌ | ✅ | Cycle through previous prompts |
+| Input history (Up/Down) | ✅ | ✅ | Cycles through user messages from store |
 | Vim mode input | ❌ | ✅ | /vim command |
 | Kill ring (Ctrl+Y) | ❌ | ✅ | Terminal emacs bindings |
 
@@ -37,7 +37,7 @@ Tracking what Horseman can do vs the real Claude Code CLI.
 |---------|----------|-------------|-------|
 | `/clear` | ✅ | ✅ | |
 | `/compact` | ✅ | ✅ | PTY-based with progress |
-| `/help` | ❌ | ✅ | |
+| `/help` | ✅ | ✅ | Static modal with shortcuts |
 | `/exit` | N/A | ✅ | GUI has close button |
 | `/status` | ❌ | ✅ | Version, model, account info |
 | `/config` | ❌ | ✅ | Settings with search |
@@ -45,7 +45,7 @@ Tracking what Horseman can do vs the real Claude Code CLI.
 | `/cost` | 🟡 | ✅ | We show cost in session, not historical |
 | `/stats` | ❌ | ✅ | Daily usage, streaks, history |
 | `/doctor` | ❌ | ✅ | Diagnostics, config issues |
-| `/init` | ❌ | ✅ | Initialize CLAUDE.md |
+| `/init` | ❌ | ✅ | See PLUGIN_SYSTEM_DESIGN.md - transcript watching pattern |
 | `/memory` | ❌ | ✅ | Edit CLAUDE.md files |
 | `/login` | ❌ | ✅ | Switch accounts |
 | `/logout` | ❌ | ✅ | |
@@ -66,7 +66,7 @@ Tracking what Horseman can do vs the real Claude Code CLI.
 | `/plugin` | ❌ | ✅ | Plugin management |
 | `/agents` | ❌ | ✅ | Manage custom agents |
 | `/todos` | 🟡 | ✅ | We show in message footer |
-| `/export` | ❌ | ✅ | Export conversation |
+| `/export` | ✅ | ✅ | Copies markdown to clipboard |
 | `/bug` | ❌ | ✅ | Report bugs |
 | `/add-dir` | ❌ | ✅ | Additional working directories |
 | `/ide` | N/A | ✅ | IDE integrations |
@@ -80,7 +80,7 @@ Tracking what Horseman can do vs the real Claude Code CLI.
 | `/privacy-settings` | ❌ | ✅ | |
 | `/output-style` | ❌ | ✅ | |
 | `/statusline` | N/A | ✅ | Terminal status line |
-| **Custom slash commands** | ❌ | ✅ | User-defined in .claude/commands/ |
+| **Custom slash commands** | ❌ | ✅ | See PLUGIN_SYSTEM_DESIGN.md - ~/.claude/commands/*.md |
 
 ---
 
@@ -180,11 +180,13 @@ Tracking what Horseman can do vs the real Claude Code CLI.
 
 ## Skills & Plugins
 
+See **PLUGIN_SYSTEM_DESIGN.md** for full plugin system documentation.
+
 | Feature | Horseman | Claude Code | Notes |
 |---------|----------|-------------|-------|
-| **Skills system** | ❌ | ✅ | ~/.claude/skills |
+| **Skills system** | ❌ | ✅ | ~/.claude/skills - SKILL.md + rules/ + metadata.json |
 | **Hot-reload skills** | ❌ | ✅ | |
-| **Skill frontmatter** | ❌ | ✅ | allowed-tools, context, etc. |
+| **Skill frontmatter** | ❌ | ✅ | name, description, triggers |
 | **Plugin marketplace** | ❌ | ✅ | /plugin discovery |
 | **Plugin auto-update** | ❌ | ✅ | |
 | **Custom agents** | ❌ | ✅ | /agents |
@@ -193,12 +195,14 @@ Tracking what Horseman can do vs the real Claude Code CLI.
 
 ## Hooks
 
+See **PLUGIN_SYSTEM_DESIGN.md** for full hook system documentation.
+
 | Feature | Horseman | Claude Code | Notes |
 |---------|----------|-------------|-------|
-| **PreToolUse hooks** | ❌ | ✅ | |
-| **PostToolUse hooks** | ❌ | ✅ | |
-| **Stop hooks** | ❌ | ✅ | |
-| **SessionStart hooks** | ❌ | ✅ | |
+| **PreToolUse hooks** | ❌ | ✅ | Run before tool execution, can block |
+| **PostToolUse hooks** | ❌ | ✅ | Run after tool execution |
+| **Stop hooks** | ❌ | ✅ | Can continue session (ralph-loop pattern) |
+| **SessionStart hooks** | ❌ | ✅ | Run when session begins |
 | **Setup hooks** | ❌ | ✅ | --init, --maintenance |
 | **Hook configuration UI** | ❌ | ✅ | /hooks |
 
@@ -216,20 +220,27 @@ Tracking what Horseman can do vs the real Claude Code CLI.
 
 ---
 
-## Keyboard Shortcuts
+## Keyboard Shortcuts ⭐ PRIORITY FOR v1
 
 | Shortcut | Horseman | Claude Code | Notes |
 |----------|----------|-------------|-------|
 | Enter/Ctrl+Enter to send | ✅ | ✅ | |
-| Shift+Enter newline | 🟡 | ✅ | Terminal needs setup |
-| **Ctrl+G external editor** | ❌ | ✅ | |
-| **Alt+P model switch** | ❌ | ✅ | |
-| **Alt+T thinking toggle** | ❌ | ✅ | |
-| **Ctrl+B background task** | ❌ | ✅ | |
-| **Ctrl+O transcript mode** | ❌ | ✅ | |
-| **Esc+Esc rewind** | ❌ | ✅ | |
-| **Ctrl+R history search** | ❌ | ✅ | |
+| Shift+Enter newline | ✅ | ✅ | |
+| Up/Down input history | ✅ | ✅ | Cycles through user messages |
+| Cmd+K clear input | ✅ | ✅ | Clears input and pending files |
+| Cmd+N new session | ✅ | ✅ | New tab in same directory |
+| Cmd+W close tab | ✅ | ✅ | |
+| Cmd+1-9 switch tabs | ✅ | ✅ | |
+| Cmd+[ / ] | ✅ | ✅ | Prev/next tab |
+| Esc stop generation | ✅ | ✅ | Interrupts when streaming |
 | Cmd+F search | ✅ | N/A | GUI feature |
+| Ctrl+G external editor | ❌ | ✅ | Post-v1 |
+| Alt+P model switch | ❌ | ✅ | We have dropdown |
+| Alt+T thinking toggle | ❌ | ✅ | Post-v1 |
+| Ctrl+B background task | ❌ | ✅ | Post-v1 |
+| Ctrl+O transcript mode | ❌ | ✅ | Post-v1 |
+| Esc+Esc rewind | ❌ | ✅ | Post-v1 |
+| Ctrl+R history search | ❌ | ✅ | Post-v1 (Up/Down first) |
 
 ---
 
@@ -286,39 +297,51 @@ Tracking what Horseman can do vs the real Claude Code CLI.
 
 ## Priority Gaps (Suggested Focus Areas)
 
-### High Impact, Hard
-1. **Image input** - Paste/drag images into chat
-2. **Skills system** - ~/.claude/skills hot-reload
-3. **Custom slash commands** - .claude/commands/ support
-4. **Hooks system** - Pre/Post tool use hooks
+### 🚀 v1 SHIP TARGETS
 
-### High Impact, Medium
-5. **More slash commands** - /context, /doctor, /init, /memory
-6. **Wildcard permissions** - `Bash(npm *)` patterns
-7. **Input history** - Up/Down arrow cycling
-8. **Plan mode workflow** - Full /plan experience
+| Feature | Difficulty | Approach |
+|---------|------------|----------|
+| ~~**Keyboard shortcuts**~~ | ✅ Done | Global listener in App.tsx |
+| ~~**Input history (Up/Down)**~~ | ✅ Done | ChatInput with user message history |
+| ~~**/export**~~ | ✅ Done | Copies markdown to clipboard |
+| ~~**/help**~~ | ✅ Done | HelpModal with shortcuts |
+| **Image via file picker** | Medium | Workaround until paste/drag works |
 
-### Medium Impact
-9. **Background tasks** - Ctrl+B to background
-10. **Rewind** - /rewind conversation/code
-11. **Export** - /export conversation
-12. **External editor** - Ctrl+G support
+### Post-v1 High Impact
 
-### Nice to Have
-13. Plugin/marketplace support
-14. MCP server management UI
-15. Stats/usage visualization
-16. Session forking
+**See PLUGIN_SYSTEM_DESIGN.md** for implementation plan.
+
+| Feature | Difficulty | Notes |
+|---------|------------|-------|
+| Image paste/drag | Hard | Tauri clipboard limitations |
+| Custom slash commands | Medium | PLUGIN_SYSTEM_DESIGN.md Phase 1 |
+| Transcript watcher | Medium | PLUGIN_SYSTEM_DESIGN.md Phase 2 - enables /init streaming |
+| Plugin discovery | Low | PLUGIN_SYSTEM_DESIGN.md Phase 3 |
+| Skills system | Medium | PLUGIN_SYSTEM_DESIGN.md Phase 4 |
+| Hooks system | Hard | PLUGIN_SYSTEM_DESIGN.md Phase 5 |
+| Wildcard permissions | Medium | Glob matching |
+
+### Post-v1 Nice to Have
+
+- Background tasks (Ctrl+B)
+- /rewind
+- External editor (Ctrl+G)
+- Session forking
+- MCP server management UI
+- Stats/usage visualization
+- Plugin marketplace
 
 ---
 
 ## Notes
 
-- Image input is hard because we're not a terminal - need file picker or drag-drop handling in Tauri
-- Skills/hooks are large systems - consider if we want full parity or simplified versions
-- Some slash commands can be GUI buttons/menus instead of typed commands
-- Terminal-specific features (OSC 8, vim mode) may not make sense in GUI context
+- ~~**Input history**: No extra storage needed - user messages already in store~~ ✅ Done
+- ~~**Keyboard shortcuts**: Power user expectation, quick wins~~ ✅ Done
+- **Image input**: File picker is pragmatic v1 workaround
+- Skills/hooks are large systems - consider simplified versions
+- Some slash commands better as GUI buttons/menus
+- Terminal-specific features (OSC 8, vim mode) may not make sense in GUI
 
 ---
 
-*Last updated: 2026-01-19*
+*Last updated: 2026-01-19 (v1 ship targets defined)*

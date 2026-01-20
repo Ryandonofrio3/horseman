@@ -9,6 +9,7 @@ import { createPermissionsSlice } from './slices/permissions'
 import { createQuestionsSlice } from './slices/questions'
 import { createSlashSlice } from './slices/slash'
 import { createPlanSlice } from './slices/plan'
+import { createDraftSlice } from './slices/draft'
 import { tauriStorage } from '@/lib/storage'
 import { createSessionState } from './helpers'
 
@@ -63,6 +64,7 @@ export const useStore = create<AppStore>()(
       ...createQuestionsSlice(...args),
       ...createSlashSlice(...args),
       ...createPlanSlice(...args),
+      ...createDraftSlice(...args),
     }),
     {
       name: 'horseman-state',

@@ -122,4 +122,10 @@ export interface PlanSlice {
   clearPlan: () => void
 }
 
-export type AppStore = SessionsSlice & ChatSlice & SettingsSlice & PermissionsSlice & QuestionsSlice & SlashSlice & PlanSlice
+export interface DraftSlice {
+  drafts: Record<string, string>  // sessionId → draft text
+  setDraft: (sessionId: string, text: string) => void
+  clearDraft: (sessionId: string) => void
+}
+
+export type AppStore = SessionsSlice & ChatSlice & SettingsSlice & PermissionsSlice & QuestionsSlice & SlashSlice & PlanSlice & DraftSlice
