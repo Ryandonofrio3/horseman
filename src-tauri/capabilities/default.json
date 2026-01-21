@@ -49,6 +49,10 @@
     "clipboard-manager:allow-write-text",
     "process:default",
     "process:allow-exit",
-    "notification:default"
+    "process:allow-restart",
+    "notification:default",
+    "updater:default",
+    "updater:allow-check",
+    "updater:allow-download-and-install"
   ]
 }
