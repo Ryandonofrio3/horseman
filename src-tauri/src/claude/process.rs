@@ -162,13 +162,25 @@ impl ClaudeManager {
 
         debug_log!("SPAWN", "Command: claude {}", args.join(" "));
 
-        // Spawn the process
+        // Spawn the process via login shell to inherit user's PATH (for NVM, Volta, etc.)
         // IMPORTANT: Use Stdio::null() for stdin - piped stdin causes Claude to block
-        // For follow-up messages, spawn a new process with --resume
         let claude_bin = config::claude_binary();
         debug_log!("SPAWN", "Using Claude binary: {}", claude_bin);
-        let mut child = Command::new(&claude_bin)
-            .args(&args)
+
+        // Build the full command string with proper escaping
+        let escaped_args: Vec<String> = args.iter().map(|arg| {
+            // Escape single quotes in arguments by ending quote, adding escaped quote, starting quote again
+            let escaped = arg.replace("'", "'\"'\"'");
+            format!("'{}'", escaped)
+        }).collect();
+        let full_command = format!("{} {}", claude_bin, escaped_args.join(" "));
+        debug_log!("SPAWN", "Full shell command: {}", full_command);
+
+        // Use login shell (-l) to source .zshrc/.bashrc which sets up NVM/Volta/etc.
+        // This ensures node is in PATH even when launched from GUI
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+        let mut child = Command::new(&shell)
+            .args(["-l", "-c", &full_command])
             .current_dir(&working_directory)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())

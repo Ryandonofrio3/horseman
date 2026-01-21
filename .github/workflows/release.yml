@@ -83,8 +83,8 @@ jobs:
             This version supports auto-updates! Check Settings → Updates.
 
             ⚠️ This is an early alpha release. Expect bugs!
-          releaseDraft: true
-          prerelease: true
+          releaseDraft: false
+          prerelease: false
           updaterJsonKeepUniversal: true
           args: --target universal-apple-darwin
 

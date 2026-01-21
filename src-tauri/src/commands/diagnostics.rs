@@ -141,8 +141,11 @@ pub fn get_diagnostics() -> DiagnosticsInfo {
     let exists = resolved_pb.exists();
     let is_file = resolved_pb.is_file();
 
+    // Run via login shell to get NVM/Volta/etc in PATH
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
     let (executable, version, error) = if exists && is_file {
-        match Command::new(&resolved_path).arg("--version").output() {
+        let version_cmd = format!("{} --version", resolved_path);
+        match Command::new(&shell).args(["-l", "-c", &version_cmd]).output() {
             Ok(output) => {
                 if output.status.success() {
                     let v = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -264,17 +267,17 @@ pub fn get_diagnostics() -> DiagnosticsInfo {
 
 /// Actually try to spawn claude and capture output
 fn run_spawn_test(claude_path: &str) -> SpawnTestResult {
-    let cmd_str = format!("{} -p --verbose --output-format stream-json --max-turns 1 \"Say exactly: HORSEMAN_TEST_OK\"", claude_path);
+    // Build command to run via login shell (to get NVM/Volta/etc in PATH)
+    let inner_cmd = format!(
+        "{} -p --verbose --output-format stream-json --max-turns 1 'Say exactly: HORSEMAN_TEST_OK'",
+        claude_path
+    );
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+    let cmd_str = format!("{} -l -c \"{}\"", shell, inner_cmd);
 
-    // Try to spawn with timeout
-    let result = Command::new(claude_path)
-        .args([
-            "-p",
-            "--verbose",
-            "--output-format", "stream-json",
-            "--max-turns", "1",
-            "Say exactly: HORSEMAN_TEST_OK"
-        ])
+    // Try to spawn with timeout via login shell
+    let result = Command::new(&shell)
+        .args(["-l", "-c", &inner_cmd])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
